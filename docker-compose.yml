@@ -1,0 +1,65 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_DB: ${DB_NAME:-indigis}
+      POSTGRES_USER: ${DB_USER:-indigis}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-indigis}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-indigis}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - ./backend:/app
+      - cog-data:/cogs
+    ports:
+      - "8000:8000"
+    environment:
+      - DJANGO_SETTINGS_MODULE=config.settings.dev
+      - DATABASE_URL=postgis://${DB_USER:-indigis}:${DB_PASSWORD:-indigis}@db:5432/${DB_NAME:-indigis}
+      - TITILER_PUBLIC_URL=${TITILER_PUBLIC_URL:-http://localhost:8080}
+      - COG_HTTP_BASE_URL=${COG_HTTP_BASE_URL:-http://backend:8000/media/cogs}
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    command: npm run dev -- --host
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_BASE=/api/v1
+      - VITE_TITILER_URL=${TITILER_URL:-http://localhost:8080}
+    depends_on:
+      - backend
+
+  titiler:
+    image: ghcr.io/developmentseed/titiler:latest
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - WORKERS_PER_CORE=1
+    volumes:
+      - cog-data:/data/cogs
+
+volumes:
+  pgdata:
+  cog-data:

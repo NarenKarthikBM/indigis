@@ -1,0 +1,15 @@
+Django==5.0.4
+djangorestframework==3.15.1
+djangorestframework-gis==1.0
+djangorestframework-simplejwt==5.3.1
+psycopg2-binary==2.9.9
+django-cors-headers==4.3.1
+gunicorn==22.0.0
+GDAL==3.6.2
+dj-database-url==2.1.0
+python-dotenv==1.0.1
+rasterio==1.4.3
+rio-cogeo==5.4.0
+numpy>=1.24
+shapely>=2.0
+rasterstats>=0.19

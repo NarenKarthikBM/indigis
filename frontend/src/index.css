@@ -1,0 +1,143 @@
+@import "tailwindcss/base";
+@import "tailwindcss/components";
+@import "tailwindcss/utilities";
+
+:root {
+  --bg-primary: #f8fafc;
+  --bg-secondary: #ffffff;
+  --surface: #f1f5f9;
+  --surface-raised: #ffffff;
+  --surface-hover: #e2e8f0;
+  --accent-purple: #7c3aed;
+  --accent-coral: #ef4444;
+  --accent-blue: #3b82f6;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --success: #10b981;
+  --nav-bg: #312e81;
+  --nav-active: #4338ca;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: "Inter", system-ui, sans-serif;
+}
+
+/* Leaflet overrides */
+.leaflet-container {
+  background: #0d1117;
+}
+
+.leaflet-interactive:focus {
+  outline: none;
+}
+
+.leaflet-control-zoom a {
+  background-color: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-strong) !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15) !important;
+}
+
+.leaflet-control-zoom a:hover {
+  background-color: var(--surface-hover) !important;
+}
+
+.leaflet-popup-content-wrapper {
+  background-color: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border-strong) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15) !important;
+}
+
+.leaflet-popup-tip {
+  background-color: var(--bg-secondary) !important;
+}
+
+.leaflet-popup-close-button {
+  color: var(--text-muted) !important;
+}
+
+/* Custom range input */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-runnable-track {
+  background: var(--border-strong);
+  border-radius: 4px;
+  height: 4px;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--accent-purple);
+  border-radius: 50%;
+  height: 14px;
+  width: 14px;
+  margin-top: -5px;
+}
+
+/* React Flow Controls dark theme */
+.react-flow__controls-button {
+  background: #1a2535 !important;
+  border-bottom-color: #253244 !important;
+  color: #94a3b8 !important;
+  fill: #94a3b8 !important;
+}
+.react-flow__controls-button:hover {
+  background: #253244 !important;
+  color: #e2e8f0 !important;
+  fill: #e2e8f0 !important;
+}
+
+/* Workflow Builder */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes nodePulse {
+  0%, 100% { box-shadow: 0 0 0 2px #f59e0b44; }
+  50% { box-shadow: 0 0 0 4px #f59e0b88; }
+}
+.node-pulse {
+  animation: nodePulse 1.2s ease-in-out infinite;
+}
+.react-flow__node {
+  cursor: pointer;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--surface);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
