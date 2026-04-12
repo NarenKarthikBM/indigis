@@ -10,7 +10,7 @@ interface Props {
   vectorLayerInfo: VectorLayerInfo;
 }
 
-const DEFAULT_STYLES: Record<string, L.PathOptions> = {
+const DEFAULT_STYLES: Record<string, L.PathOptions & { radius?: number }> = {
   LineString: { color: "#FBBF24", weight: 1.5, opacity: 0.9 },
   MultiLineString: { color: "#FBBF24", weight: 1.5, opacity: 0.9 },
   Polygon: { color: "#8B5CF6", weight: 1, fillColor: "#A78BFA", fillOpacity: 0.2 },

@@ -47,9 +47,9 @@ function BoundaryToggleButton() {
   );
 }
 
-const indiaBounds = [
+const indiaBounds: [[number, number], [number, number]] = [
   [3, 62], // Southwest (Lat, Lon)
-  [39, 100]  // Northeast (Lat, Lon)
+  [39, 100],  // Northeast (Lat, Lon)
 ];
 
 export default function MapCanvas() {

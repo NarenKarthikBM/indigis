@@ -15,7 +15,7 @@ export default function RegionPopup() {
     <Popup
       key={`${code}-${latlng.lat}-${latlng.lng}`}
       position={[latlng.lat, latlng.lng]}
-      onClose={() => setActiveRegion(null)}
+      eventHandlers={{ remove: () => setActiveRegion(null) }}
       closeButton
     >
       <div
