@@ -11,7 +11,7 @@ class LayerCategorySerializer(serializers.ModelSerializer):
 class RasterAssetSerializer(serializers.ModelSerializer):
     class Meta:
         model = RasterAsset
-        fields = ["id", "cog_url", "period_label", "created_at"]
+        fields = ["id", "cog_url", "period_label", "data_period_start", "data_period_end", "created_at"]
 
 
 class VectorLayerSerializer(serializers.ModelSerializer):

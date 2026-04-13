@@ -6,7 +6,6 @@ import type {
   ReclassifyConfig,
   ReclassifyRule,
   ZonalStatsConfig,
-  WorkflowNodeType,
 } from "../../types/workflow.types";
 
 const STAT_OPTIONS = ["mean", "min", "max", "count", "sum", "std", "median"];
@@ -106,7 +105,7 @@ export default function NodeConfigPanel() {
         />
       )}
 
-      {["difference", "clip", "preview_output"].includes(nodeType) && (
+      {!["raster_input", "vector_input", "ndvi", "reclassify", "zonal_stats"].includes(nodeType) && (
         <div style={{ color: "#94a3b8", fontSize: 12 }}>
           No configuration required.
         </div>

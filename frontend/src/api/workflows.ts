@@ -1,5 +1,10 @@
 import client from "./client";
-import type { WorkflowGraph, WorkflowResult, SavedWorkflow, SaveAsLayerRequest } from "../types/workflow.types";
+import type { WorkflowGraph, WorkflowResult, SavedWorkflow, SaveAsLayerRequest, NodePaletteItem } from "../types/workflow.types";
+
+export async function fetchNodeCatalog(): Promise<NodePaletteItem[]> {
+  const res = await client.get("/workflows/node-catalog/");
+  return res.data;
+}
 
 export async function executeWorkflow(graph: WorkflowGraph & { workflow_id?: number }): Promise<WorkflowResult> {
   const res = await client.post("/workflows/execute/", graph);

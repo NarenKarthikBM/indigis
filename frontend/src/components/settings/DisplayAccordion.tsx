@@ -73,7 +73,7 @@ export default function DisplayAccordion({ slug }: Props) {
     availableLayers: s.availableLayers,
   }));
 
-  const { handleColormapChange, handleEnableMultiBand, handleBandConfigChange, handleEnableComposite, handleCompositeBandChange } = useLayerManager();
+  const { handleColormapChange, handleEnableMultiBand, handleBandConfigChange, handleEnableComposite, handleCompositeBandChange, handlePeriodChange } = useLayerManager();
   const config = layerConfigs[slug];
   const layer = availableLayers.find((l) => l.slug === slug);
 
@@ -84,6 +84,14 @@ export default function DisplayAccordion({ slug }: Props) {
       </div>
     );
   }
+
+  const sortedAssets = layer.layer_type === "raster" && layer.raster_assets.length > 1
+    ? [...layer.raster_assets].sort((a, b) => {
+        const dateA = a.data_period_end ?? a.created_at;
+        const dateB = b.data_period_end ?? b.created_at;
+        return dateB.localeCompare(dateA);  // latest first
+      })
+    : [];
 
   const isMultiBandCapable = layer.layer_type === "raster" && (layer.band_count ?? 0) > 1;
   const isCompositeCapable = layer.layer_type === "raster" && (layer.band_count ?? 0) >= 3;
@@ -120,6 +128,41 @@ export default function DisplayAccordion({ slug }: Props) {
           </div>
         </div>
       </AccordionSection>
+
+      {sortedAssets.length > 1 && (
+        <AccordionSection title="Time Period">
+          <select
+            value={config.selectedPeriodLabel ?? ""}
+            onChange={(e) => handlePeriodChange(slug, e.target.value)}
+            style={{
+              width: "100%",
+              background: "#1a2535",
+              border: "1px solid #253244",
+              borderRadius: 4,
+              color: "#e2e8f0",
+              padding: "5px 8px",
+              fontSize: 11,
+              cursor: "pointer",
+            }}
+          >
+            <option value="">Latest</option>
+            {sortedAssets.map((asset) => {
+              const label = asset.period_label || asset.created_at.slice(0, 10);
+              const display = asset.data_period_end
+                ? asset.data_period_end
+                : label;
+              return (
+                <option key={asset.id} value={asset.period_label}>
+                  {display}
+                </option>
+              );
+            })}
+          </select>
+          <div style={{ marginTop: 4, fontSize: 10, color: "#556070" }}>
+            {sortedAssets.length} period{sortedAssets.length !== 1 ? "s" : ""} available
+          </div>
+        </AccordionSection>
+      )}
 
       {layer.layer_type === "raster" && !config.multiBandMode && !config.compositeMode && (
         <AccordionSection title="Colormap">

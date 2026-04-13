@@ -2,15 +2,7 @@ import type { Node, Edge } from "@xyflow/react";
 
 export type HandleDataType = "raster" | "vector" | "any";
 
-export type WorkflowNodeType =
-  | "raster_input"
-  | "vector_input"
-  | "difference"
-  | "ndvi"
-  | "reclassify"
-  | "clip"
-  | "zonal_stats"
-  | "preview_output";
+export type WorkflowNodeType = string;
 
 export interface RasterInputConfig {
   layer_slug: string;
@@ -56,6 +48,10 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   label: string;
   config: NodeConfig;
   status: NodeStatus;
+  // populated from catalog when node is dropped onto canvas
+  inputs?: NodeHandleSpec[];
+  outputs?: NodeHandleSpec[];
+  category?: "input" | "processing" | "output";
 }
 
 export type WFNode = Node<WorkflowNodeData>;
@@ -91,7 +87,7 @@ export interface NodeHandleSpec {
 }
 
 export interface NodePaletteItem {
-  type: WorkflowNodeType;
+  type: string;
   label: string;
   category: "input" | "processing" | "output";
   description: string;

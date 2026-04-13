@@ -44,7 +44,7 @@ export default function OverlayTileLayer() {
           if (config.tileUrl) {
             return (
               <TileLayer
-                key={slug}
+                key={config.tileUrl}
                 url={config.tileUrl}
                 opacity={config.opacity}
                 attribution={layer.data_source || ""}

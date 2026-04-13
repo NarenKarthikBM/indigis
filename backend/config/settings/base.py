@@ -23,6 +23,7 @@ THIRD_PARTY_APPS = [
     "rest_framework",
     "rest_framework_gis",
     "corsheaders",
+    "django_celery_beat",
 ]
 
 LOCAL_APPS = [
@@ -30,6 +31,7 @@ LOCAL_APPS = [
     "apps.layers",
     "apps.users",
     "apps.workflows",
+    "apps.mining",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -126,3 +128,17 @@ TITILER_URL = os.environ.get("TITILER_URL", "http://titiler:8080")
 TITILER_PUBLIC_URL = os.environ.get("TITILER_PUBLIC_URL", "http://localhost:8080")
 # Base URL that TiTiler (inside Docker) uses to fetch COG files served by the backend
 COG_HTTP_BASE_URL = os.environ.get("COG_HTTP_BASE_URL", "http://backend:8000/media/cogs")
+
+# ---------------------------------------------------------------------------
+# Celery
+# ---------------------------------------------------------------------------
+CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", "redis://redis:6379/0")
+CELERY_RESULT_BACKEND = os.environ.get("CELERY_RESULT_BACKEND", "redis://redis:6379/0")
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
+
+# OpenTopography API key — override in .env or per-DataSource config
+OPENTOPO_API_KEY = os.environ.get("OPENTOPO_API_KEY", "")

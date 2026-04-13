@@ -1,5 +1,7 @@
-import { NODE_CATALOG } from "./nodes/catalog";
-import type { NodePaletteItem, WorkflowNodeType } from "../../types/workflow.types";
+import { useEffect } from "react";
+import { useStore } from "../../store";
+import { fetchNodeCatalog } from "../../api/workflows";
+import type { NodePaletteItem } from "../../types/workflow.types";
 
 const CATEGORY_ORDER = ["input", "processing", "output"] as const;
 const CATEGORY_LABEL: Record<string, string> = {
@@ -60,9 +62,17 @@ function PaletteItem({ item }: { item: NodePaletteItem }) {
 }
 
 export default function NodePalette() {
+  const nodeCatalog = useStore((s) => s.nodeCatalog);
+  const setCatalog = useStore((s) => s.setCatalog);
+
+  useEffect(() => {
+    if (nodeCatalog.length > 0) return;
+    fetchNodeCatalog().then(setCatalog).catch(console.error);
+  }, []);
+
   const grouped = CATEGORY_ORDER.map((cat) => ({
     cat,
-    items: NODE_CATALOG.filter((n) => n.category === cat),
+    items: nodeCatalog.filter((n) => n.category === cat),
   }));
 
   return (
@@ -83,26 +93,32 @@ export default function NodePalette() {
         NODE PALETTE
       </div>
 
-      {grouped.map(({ cat, items }) => (
-        <div key={cat} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <div
-            style={{
-              fontSize: 10,
-              fontWeight: 600,
-              color: CATEGORY_COLOR[cat],
-              textTransform: "uppercase",
-              letterSpacing: "0.07em",
-              paddingLeft: 2,
-              marginBottom: 2,
-            }}
-          >
-            {CATEGORY_LABEL[cat]}
+      {nodeCatalog.length === 0 && (
+        <div style={{ fontSize: 11, color: "#475569", paddingLeft: 2 }}>Loading nodes…</div>
+      )}
+
+      {grouped.map(({ cat, items }) =>
+        items.length === 0 ? null : (
+          <div key={cat} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <div
+              style={{
+                fontSize: 10,
+                fontWeight: 600,
+                color: CATEGORY_COLOR[cat],
+                textTransform: "uppercase",
+                letterSpacing: "0.07em",
+                paddingLeft: 2,
+                marginBottom: 2,
+              }}
+            >
+              {CATEGORY_LABEL[cat]}
+            </div>
+            {items.map((item) => (
+              <PaletteItem key={item.type} item={item} />
+            ))}
           </div>
-          {items.map((item) => (
-            <PaletteItem key={item.type} item={item} />
-          ))}
-        </div>
-      ))}
+        )
+      )}
 
       <div style={{ marginTop: "auto", fontSize: 10, color: "#475569", paddingLeft: 2 }}>
         Drag nodes onto the canvas

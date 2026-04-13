@@ -13,3 +13,10 @@ rio-cogeo==5.4.0
 numpy>=1.24
 shapely>=2.0
 rasterstats>=0.19
+celery>=5.3
+django-celery-beat>=2.6
+redis>=5.0
+requests>=2.31
+pystac-client>=0.7
+earthaccess>=0.11
+AHPy==2.1

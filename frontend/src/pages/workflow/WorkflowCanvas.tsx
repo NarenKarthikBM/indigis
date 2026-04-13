@@ -17,7 +17,6 @@ import "@xyflow/react/dist/style.css";
 
 import { useStore } from "../../store";
 import { nodeTypes } from "./nodes/nodeTypes";
-import { NODE_CATALOG, CATALOG_MAP } from "./nodes/catalog";
 import type { WFNode, WorkflowNodeData, WorkflowNodeType } from "../../types/workflow.types";
 
 let _nodeCounter = 0;
@@ -32,6 +31,7 @@ function WorkflowCanvasInner() {
   const setWfEdges = useStore((s) => s.setWfEdges);
   const selectNode = useStore((s) => s.selectNode);
   const addWfNode = useStore((s) => s.addWfNode);
+  const catalogMap = useStore((s) => s.catalogMap);
   const { screenToFlowPosition } = useReactFlow();
 
   const onNodesChange: OnNodesChange = useCallback(
@@ -54,8 +54,8 @@ function WorkflowCanvasInner() {
       const tgtNode = wfNodes.find((n) => n.id === target);
       if (!srcNode || !tgtNode) return;
 
-      const srcCatalog = CATALOG_MAP[srcNode.data.nodeType];
-      const tgtCatalog = CATALOG_MAP[tgtNode.data.nodeType];
+      const srcCatalog = catalogMap[srcNode.data.nodeType];
+      const tgtCatalog = catalogMap[tgtNode.data.nodeType];
       if (!srcCatalog || !tgtCatalog) return;
 
       const srcHandleSpec = srcCatalog.outputs.find((h) => h.handle === sourceHandle);
@@ -75,7 +75,7 @@ function WorkflowCanvasInner() {
 
       setWfEdges(addEdge(connection, wfEdges));
     },
-    [wfNodes, wfEdges, setWfEdges]
+    [wfNodes, wfEdges, setWfEdges, catalogMap]
   );
 
   const onNodeClick = useCallback(
@@ -96,7 +96,7 @@ function WorkflowCanvasInner() {
       const nodeType = e.dataTransfer.getData("application/wf-node-type") as WorkflowNodeType;
       if (!nodeType) return;
 
-      const catalogItem = CATALOG_MAP[nodeType];
+      const catalogItem = catalogMap[nodeType];
       if (!catalogItem) return;
 
       const position = screenToFlowPosition({ x: e.clientX, y: e.clientY });
@@ -110,11 +110,14 @@ function WorkflowCanvasInner() {
           label: catalogItem.label,
           config: defaultConfig(nodeType),
           status: "idle",
+          inputs: catalogItem.inputs,
+          outputs: catalogItem.outputs,
+          category: catalogItem.category,
         } as WorkflowNodeData,
       };
       addWfNode(newNode);
     },
-    [screenToFlowPosition, addWfNode]
+    [screenToFlowPosition, addWfNode, catalogMap]
   );
 
   return (

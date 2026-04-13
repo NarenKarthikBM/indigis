@@ -11,7 +11,15 @@ from rest_framework import status
 
 from .executor import execute_graph, WorkflowError
 from .models import Workflow, WorkflowRun
+from .nodes.registry import NODE_CATALOG
 from .serializers import WorkflowSerializer
+
+
+class NodeCatalogView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response(NODE_CATALOG)
 
 
 class WorkflowListCreateView(APIView):

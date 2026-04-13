@@ -1,6 +1,5 @@
 import type { Edge } from "@xyflow/react";
-import type { WFNode, WorkflowNodeType, NodeConfig, WorkflowResult, NodeStatus, SavedWorkflow, WorkflowNodeData } from "../types/workflow.types";
-import { CATALOG_MAP } from "../pages/workflow/nodes/catalog";
+import type { WFNode, WorkflowNodeType, NodeConfig, WorkflowResult, NodeStatus, SavedWorkflow, WorkflowNodeData, NodePaletteItem } from "../types/workflow.types";
 
 export interface WorkflowState {
   wfNodes: WFNode[];
@@ -13,6 +12,9 @@ export interface WorkflowState {
   currentWorkflowName: string;
   isDirty: boolean;
   savedWorkflows: SavedWorkflow[];
+  // Node catalog fetched from backend
+  nodeCatalog: NodePaletteItem[];
+  catalogMap: Record<string, NodePaletteItem>;
 
   setWfNodes: (nodes: WFNode[]) => void;
   setWfEdges: (edges: Edge[]) => void;
@@ -28,6 +30,7 @@ export interface WorkflowState {
   setDirty: (dirty: boolean) => void;
   setSavedWorkflows: (list: SavedWorkflow[]) => void;
   loadWorkflow: (wf: SavedWorkflow) => void;
+  setCatalog: (catalog: NodePaletteItem[]) => void;
 }
 
 const DEFAULT_NODES: WFNode[] = [
@@ -75,6 +78,8 @@ export const createWorkflowSlice = (
   currentWorkflowName: "",
   isDirty: false,
   savedWorkflows: [],
+  nodeCatalog: [],
+  catalogMap: {},
 
   setWfNodes: (nodes) => set(() => ({ wfNodes: nodes, isDirty: true })),
   setWfEdges: (edges) => set(() => ({ wfEdges: edges, isDirty: true })),
@@ -116,11 +121,17 @@ export const createWorkflowSlice = (
   setDirty: (dirty) => set(() => ({ isDirty: dirty })),
   setSavedWorkflows: (list) => set(() => ({ savedWorkflows: list })),
 
+  setCatalog: (catalog) =>
+    set(() => ({
+      nodeCatalog: catalog,
+      catalogMap: Object.fromEntries(catalog.map((item) => [item.type, item])),
+    })),
+
   loadWorkflow: (wf) =>
-    set(() => {
+    set((state) => {
       const graph = wf.graph_data;
       const nodes: WFNode[] = (graph.nodes || []).map((n) => {
-        const catalogEntry = CATALOG_MAP[n.type];
+        const catalogEntry = state.catalogMap[n.type];
         return {
           id: n.id,
           type: n.type,
@@ -130,6 +141,9 @@ export const createWorkflowSlice = (
             label: n.label || catalogEntry?.label || n.type,
             config: n.config,
             status: "idle" as NodeStatus,
+            inputs: catalogEntry?.inputs,
+            outputs: catalogEntry?.outputs,
+            category: catalogEntry?.category,
           },
         };
       });

@@ -76,7 +76,19 @@ class TileURLView(APIView):
         if layer.layer_type != "raster":
             return Response({"detail": "Not a raster layer."}, status=status.HTTP_400_BAD_REQUEST)
 
-        asset = layer.raster_assets.order_by("-created_at").first()
+        period_label = request.query_params.get("period_label")
+        if period_label:
+            asset = layer.raster_assets.filter(period_label=period_label).first()
+            if not asset:
+                return Response(
+                    {"detail": f"No asset with period_label '{period_label}'."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+        else:
+            # Prefer most-recent data period; fall back to creation time for assets
+            # without data_period_end (e.g. user-uploaded single assets).
+            asset = layer.raster_assets.order_by("-data_period_end", "-created_at").first()
+
         if not asset:
             return Response({"detail": "No raster asset found."}, status=status.HTTP_404_NOT_FOUND)
 

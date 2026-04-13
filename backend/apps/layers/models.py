@@ -73,10 +73,26 @@ class Layer(models.Model):
 
 
 class RasterAsset(models.Model):
+    SOURCE_BOT = "bot"
+    SOURCE_USER = "user"
+    SOURCE_SYSTEM = "system"
+    SOURCE_CHOICES = [(SOURCE_BOT, "Bot"), (SOURCE_USER, "User"), (SOURCE_SYSTEM, "System")]
+
     layer = models.ForeignKey(Layer, on_delete=models.CASCADE, related_name="raster_assets")
     cog_url = models.CharField(max_length=500)
     period_label = models.CharField(max_length=50, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    parameters = models.JSONField(default=dict, blank=True)
+    data_period_start = models.DateField(null=True, blank=True)
+    data_period_end = models.DateField(null=True, blank=True)
+    source = models.CharField(max_length=20, choices=SOURCE_CHOICES, default=SOURCE_USER)
+    mining_job = models.ForeignKey(
+        "mining.MiningJob",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="raster_assets",
+    )
 
     class Meta:
         ordering = ["-created_at"]

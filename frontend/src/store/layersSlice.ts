@@ -18,6 +18,7 @@ export interface LayersState {
   setBandTileUrl: (slug: string, bandIndex: number, tileUrl: string) => void;
   setCompositeMode: (slug: string, enabled: boolean) => void;
   setCompositeBands: (slug: string, bands: [number, number, number]) => void;
+  setSelectedPeriodLabel: (slug: string, periodLabel: string | null) => void;
 }
 
 export const createLayersSlice = (
@@ -201,6 +202,18 @@ export const createLayersSlice = (
         layerConfigs: {
           ...state.layerConfigs,
           [slug]: { ...existing, compositeBands: bands, tileUrl: null },
+        },
+      };
+    }),
+
+  setSelectedPeriodLabel: (slug, periodLabel) =>
+    set((state) => {
+      const existing = state.layerConfigs[slug];
+      if (!existing) return {};
+      return {
+        layerConfigs: {
+          ...state.layerConfigs,
+          [slug]: { ...existing, selectedPeriodLabel: periodLabel, tileUrl: null },
         },
       };
     }),

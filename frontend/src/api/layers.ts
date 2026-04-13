@@ -15,12 +15,14 @@ export async function fetchTileURL(
   slug: string,
   colormap?: string,
   rescale?: string,
-  bidx?: number[]
+  bidx?: number[],
+  periodLabel?: string,
 ): Promise<TileURLResponse> {
   const params: Record<string, string> = {};
   if (colormap) params.colormap = colormap;
   if (rescale) params.rescale = rescale;
   if (bidx?.length) params.bidx = bidx.join(",");
+  if (periodLabel) params.period_label = periodLabel;
   const res = await client.get(`/layers/${slug}/tile-url/`, { params });
   return res.data;
 }

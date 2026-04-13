@@ -12,6 +12,7 @@ export function useLayerManager() {
     setBandTileUrl,
     setCompositeMode,
     setCompositeBands,
+    setSelectedPeriodLabel,
     layerConfigs,
     availableLayers,
   } = useStore();
@@ -29,7 +30,8 @@ export function useLayerManager() {
 
         try {
           const colormap = existing?.colormap || layer.default_colormap?.name || "viridis";
-          const data = await fetchTileURL(slug, colormap);
+          const periodLabel = existing?.selectedPeriodLabel ?? undefined;
+          const data = await fetchTileURL(slug, colormap, undefined, undefined, periodLabel);
           setLayerTileUrl(slug, data.tile_url);
         } catch (err) {
           console.error(`Failed to fetch tile URL for ${slug}:`, err);
@@ -158,6 +160,27 @@ export function useLayerManager() {
     [setCompositeBands, setLayerTileUrl, availableLayers]
   );
 
+  const handlePeriodChange = useCallback(
+    async (slug: string, periodLabel: string) => {
+      setSelectedPeriodLabel(slug, periodLabel);
+      const layer = availableLayers.find((l) => l.slug === slug);
+      if (!layer) return;
+      const config = layerConfigs[slug];
+      const colormap = config?.colormap || layer.default_colormap?.name || "viridis";
+      const rescale =
+        layer.min_value != null && layer.max_value != null
+          ? `${layer.min_value},${layer.max_value}`
+          : undefined;
+      try {
+        const data = await fetchTileURL(slug, colormap, rescale, undefined, periodLabel);
+        setLayerTileUrl(slug, data.tile_url);
+      } catch (err) {
+        console.error(`Failed to fetch tile URL for ${slug} period '${periodLabel}':`, err);
+      }
+    },
+    [setSelectedPeriodLabel, setLayerTileUrl, layerConfigs, availableLayers]
+  );
+
   return {
     handleToggle,
     handleColormapChange,
@@ -165,5 +188,6 @@ export function useLayerManager() {
     handleBandConfigChange,
     handleEnableComposite,
     handleCompositeBandChange,
+    handlePeriodChange,
   };
 }

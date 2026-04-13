@@ -9,6 +9,8 @@ export interface RasterAsset {
   id: number;
   cog_url: string;
   period_label: string;
+  data_period_start: string | null;  // ISO date YYYY-MM-DD
+  data_period_end: string | null;    // ISO date YYYY-MM-DD
   created_at: string;
 }
 
@@ -61,6 +63,7 @@ export interface LayerConfig {
   opacity: number;
   colormap: string;
   tileUrl: string | null;
+  selectedPeriodLabel?: string | null;
   multiBandMode?: boolean;
   bandConfigs?: BandConfig[];
   compositeMode?: boolean;
