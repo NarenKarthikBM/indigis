@@ -25,6 +25,8 @@ const GENERIC_NODE_TYPES = [
   "sin", "cos", "tan", "asin", "acos", "atan",
   // Logical / relational
   "lt", "gt", "le", "ge", "eq", "ne", "and", "or", "if",
+  // Terrain analysis
+  "d8_flow_accumulation",
   // Raster calculator
   "raster_calculator",
   // AHP weighted overlay

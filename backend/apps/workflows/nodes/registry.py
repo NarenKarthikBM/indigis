@@ -542,6 +542,15 @@ NODE_CATALOG = [
         "inputs": _RASTER_IN,
         "outputs": _RASTER_OUT,
     },
+    # ── Terrain analysis ──────────────────────────────────────────────────────
+    {
+        "type": "d8_flow_accumulation",
+        "label": "D8 Flow Accumulation",
+        "category": "processing",
+        "description": "D8 steepest-descent flow accumulation from a DEM (plain, TauDEM, or ArcGIS mode)",
+        "inputs": _RASTER_IN,
+        "outputs": _RASTER_OUT,
+    },
     # ── Raster utilities ─────────────────────────────────────────────────────
     {
         "type": "reclassify",
@@ -612,6 +621,8 @@ from .processing import (
     ndti_node, wri_node, ui_node,
     nbr2_node, bai_node, csi_node, s3_node,
     hot_node, shadow_index_node,
+    # Terrain analysis
+    d8_flow_accumulation_node,
     # Utilities
     reclassify_node, clip_node, zonal_stats_node,
 )
@@ -688,6 +699,7 @@ NODE_REGISTRY = {
     "s3": s3_node,
     "hot": hot_node,
     "shadow_index": shadow_index_node,
+    "d8_flow_accumulation": d8_flow_accumulation_node,
     "reclassify": reclassify_node,
     "clip": clip_node,
     "zonal_stats": zonal_stats_node,

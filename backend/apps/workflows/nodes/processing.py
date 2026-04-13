@@ -1125,6 +1125,83 @@ def shadow_index_node(inputs: dict, config: dict) -> dict:
     return {"type": "raster", "path": path, "metadata": {}}
 
 
+## TERRAIN ANALYSIS
+
+def d8_flow_accumulation_node(inputs: dict, config: dict) -> dict:
+    from scipy.ndimage import generic_filter
+
+    raster_in = inputs.get("raster_in")
+    if not raster_in:
+        raise ValueError("d8_flow_accumulation requires 'raster_in' input (DEM)")
+
+    method = config.get("method", "d8").lower()
+
+    with rasterio.open(raster_in["path"]) as src:
+        dem = src.read(1, masked=True).astype(np.float32)
+        profile = src.profile.copy()
+
+    nodata_mask = np.ma.getmaskarray(dem)
+    dem_arr = dem.filled(np.nan)
+
+    def fill_sinks(d):
+        filled = d.copy()
+        for _ in range(5):
+            neighborhood_min = generic_filter(filled, np.nanmin, size=3, mode="nearest")
+            filled = np.where(filled < neighborhood_min, neighborhood_min, filled)
+        return filled
+
+    if method in ("taudem", "arcgis"):
+        dem_arr = fill_sinks(dem_arr)
+
+    offsets = [
+        (-1,  0), (-1,  1), ( 0,  1), ( 1,  1),
+        ( 1,  0), ( 1, -1), ( 0, -1), (-1, -1),
+    ]
+
+    rows, cols = dem_arr.shape
+    directions = np.full((rows, cols), -1, dtype=np.int8)
+
+    for i in range(1, rows - 1):
+        for j in range(1, cols - 1):
+            if np.isnan(dem_arr[i, j]):
+                continue
+            max_slope = -np.inf
+            best_dir = -1
+            for d, (di, dj) in enumerate(offsets):
+                ni, nj = i + di, j + dj
+                if np.isnan(dem_arr[ni, nj]):
+                    continue
+                slope = dem_arr[i, j] - dem_arr[ni, nj]
+                if slope > max_slope:
+                    max_slope = slope
+                    best_dir = d
+            directions[i, j] = best_dir
+
+    acc = np.ones((rows, cols), dtype=np.float32)
+    flat_dem = dem_arr.flatten()
+    indices = np.argsort(-flat_dem)
+
+    for idx in indices:
+        i = idx // cols
+        j = idx % cols
+        d = directions[i, j]
+        if d == -1:
+            continue
+        di, dj = offsets[d]
+        ni, nj = i + di, j + dj
+        if 0 <= ni < rows and 0 <= nj < cols:
+            acc[ni, nj] += acc[i, j]
+
+    acc[nodata_mask] = _NODATA
+
+    path = _write_raster(acc, profile, "_flowacc.tif")
+    return {
+        "type": "raster",
+        "path": path,
+        "metadata": {"method": method, "description": "D8 Flow Accumulation"},
+    }
+
+
 ## UTILITIES
 
 def reclassify_node(inputs: dict, config: dict) -> dict:
@@ -1344,5 +1421,3 @@ def ahp_node(inputs: dict, config: dict) -> dict:
 
     path = _write_raster(np.ma.filled(result, _NODATA), profile, "_ahp.tif")
     return {"type": "raster", "path": path, "metadata": metadata}
-
-    return {"type": "vector", "path": tmp.name, "metadata": {"geojson": result_geojson}}
