@@ -3,14 +3,16 @@ import { useStore } from "../../store";
 import { fetchNodeCatalog } from "../../api/workflows";
 import type { NodePaletteItem } from "../../types/workflow.types";
 
-const CATEGORY_ORDER = ["input", "processing", "output"] as const;
+const CATEGORY_ORDER = ["input", "operators", "processing", "output"] as const;
 const CATEGORY_LABEL: Record<string, string> = {
   input: "Inputs",
+  operators: "Operators",
   processing: "Processing",
   output: "Output",
 };
 const CATEGORY_COLOR: Record<string, string> = {
   input: "#3b82f6",
+  operators: "#f59e0b",
   processing: "#8B5CF6",
   output: "#22c55e",
 };
