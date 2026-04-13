@@ -37,6 +37,9 @@ export default function OverlayTileLayer() {
                 url={bc.tileUrl!}
                 opacity={bc.opacity}
                 attribution={layer.data_source || ""}
+                eventHandlers={{
+                  tileerror: (e) => console.error(`[TileLayer] ${slug} band ${bc.bandIndex} tile error`, e.tile.src, e),
+                }}
               />
             ));
           }
@@ -48,6 +51,9 @@ export default function OverlayTileLayer() {
                 url={config.tileUrl}
                 opacity={config.opacity}
                 attribution={layer.data_source || ""}
+                eventHandlers={{
+                  tileerror: (e) => console.error(`[TileLayer] ${slug} tile error`, e.tile.src, e),
+                }}
               />
             );
           }

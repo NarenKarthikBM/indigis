@@ -115,8 +115,14 @@ def extract_raster_metadata(path: str) -> dict:
 
         native_crs = crs.to_string() if crs else ""
 
-        # Compute min/max across all bands, ignoring nodata
-        data = src.read(masked=True)
+        # Compute min/max across all bands using a downsampled read to avoid
+        # loading multi-GB files entirely into memory.
+        overview_shape = (
+            src.count,
+            max(1, src.height // 16),
+            max(1, src.width // 16),
+        )
+        data = src.read(out_shape=overview_shape, masked=True)
         valid = data.compressed()
         if valid.size > 0:
             min_value = round(float(np.min(valid)), 6)

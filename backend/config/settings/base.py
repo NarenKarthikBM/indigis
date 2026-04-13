@@ -98,6 +98,9 @@ MEDIA_ROOT = "/app/media"
 MEDIA_URL = "/media/"
 COG_STORAGE_PATH = "/cogs"
 
+DATA_UPLOAD_MAX_MEMORY_SIZE = None   # no limit on multipart non-file fields
+FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # stream to disk above 10 MB
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 BASE_REST_FRAMEWORK = {
