@@ -170,6 +170,8 @@ function defaultConfig(nodeType: WorkflowNodeType): Record<string, unknown> {
       return { stats: ["mean", "min", "max", "count"] };
     case "raster_calculator":
       return { expression: "" };
+    case "ahp":
+      return { matrix: {} };
     default:
       return {};
   }

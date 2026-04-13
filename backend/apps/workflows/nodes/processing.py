@@ -1239,4 +1239,110 @@ def zonal_stats_node(inputs: dict, config: dict) -> dict:
     json.dump(result_geojson, tmp)
     tmp.close()
 
+
+# ── AHP Weighted Overlay ────────────────────────────────────────────────────────
+
+_AHP_RI = {1: 0.00, 2: 0.00, 3: 0.58, 4: 0.90, 5: 1.12, 6: 1.24, 7: 1.32, 8: 1.41}
+
+
+def ahp_node(inputs: dict, config: dict) -> dict:
+    """AHP weighted overlay.
+
+    Reads band 1 of each connected raster (handles A-H), aligns all to the first
+    input's grid, builds a pairwise comparison matrix from config['matrix'], derives
+    weights via the geometric mean method, computes a weighted sum, and normalises the
+    result to [0, 1].
+    """
+    if not inputs:
+        raise ValueError("ahp requires at least one connected raster")
+
+    handles = list(inputs.keys())
+    n = len(handles)
+
+    # ── Load and align ──────────────────────────────────────────────────────
+    first_key = handles[0]
+    with rasterio.open(inputs[first_key]["path"]) as src:
+        ref_arr = src.read(1, masked=True).astype(np.float32)
+        profile = src.profile.copy()
+        transform = src.transform
+        crs = src.crs
+        height, width = src.height, src.width
+
+    bands: dict[str, np.ma.MaskedArray] = {first_key: ref_arr}
+
+    for key in handles[1:]:
+        with rasterio.open(inputs[key]["path"]) as src:
+            if src.crs == crs and src.width == width and src.height == height:
+                arr = src.read(1, masked=True).astype(np.float32)
+            else:
+                dest = np.full((height, width), _NODATA, dtype=np.float32)
+                reproject(
+                    source=rasterio.band(src, 1),
+                    destination=dest,
+                    src_transform=src.transform,
+                    src_crs=src.crs,
+                    dst_transform=transform,
+                    dst_crs=crs,
+                    resampling=Resampling.bilinear,
+                    src_nodata=_NODATA,
+                    dst_nodata=_NODATA,
+                )
+                arr = np.ma.masked_equal(dest, _NODATA)
+        bands[key] = arr
+
+    # ── Build pairwise matrix ───────────────────────────────────────────────
+    matrix_cfg = config.get("matrix", {})
+    mat = np.ones((n, n), dtype=np.float64)
+    for i in range(n):
+        for j in range(i + 1, n):
+            pair_key = f"{handles[i]}-{handles[j]}"
+            val = float(matrix_cfg.get(pair_key, 1.0))
+            val = max(1 / 9, min(9.0, val))
+            mat[i, j] = val
+            mat[j, i] = 1.0 / val
+
+    # ── Geometric mean weights ──────────────────────────────────────────────
+    row_gm = np.prod(mat, axis=1) ** (1.0 / n)
+    weights = row_gm / row_gm.sum()
+
+    # ── Consistency ratio ───────────────────────────────────────────────────
+    metadata: dict = {
+        "weights": {handles[i]: round(float(weights[i]), 4) for i in range(n)}
+    }
+    if n >= 3:
+        wv = mat @ weights
+        lambda_max = float(np.mean(wv / weights))
+        ci = (lambda_max - n) / (n - 1)
+        ri = _AHP_RI.get(n, 1.41)
+        cr = ci / ri if ri > 0 else 0.0
+        metadata["consistency_ratio"] = round(cr, 4)
+        if cr > 0.1:
+            metadata["warning"] = (
+                f"Consistency Ratio ({cr:.4f}) exceeds 0.1 — "
+                "consider revising pairwise comparisons"
+            )
+
+    # ── Weighted sum ────────────────────────────────────────────────────────
+    result = np.ma.zeros(ref_arr.shape, dtype=np.float32)
+    combined_mask = np.zeros(ref_arr.shape, dtype=bool)
+    for i, key in enumerate(handles):
+        arr = bands[key]
+        result = result + weights[i] * arr
+        if np.ma.is_masked(arr):
+            combined_mask |= np.asarray(arr.mask, dtype=bool)
+
+    result = np.ma.array(result, mask=combined_mask)
+
+    # ── Normalise to [0, 1] ─────────────────────────────────────────────────
+    valid = result.compressed() if np.ma.is_masked(result) else result.ravel()
+    if valid.size > 0:
+        mn, mx = float(valid.min()), float(valid.max())
+        if mx > mn:
+            result = (result - mn) / (mx - mn)
+        else:
+            result = np.ma.zeros_like(result)
+
+    path = _write_raster(np.ma.filled(result, _NODATA), profile, "_ahp.tif")
+    return {"type": "raster", "path": path, "metadata": metadata}
+
     return {"type": "vector", "path": tmp.name, "metadata": {"geojson": result_geojson}}

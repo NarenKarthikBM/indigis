@@ -27,6 +27,8 @@ const GENERIC_NODE_TYPES = [
   "lt", "gt", "le", "ge", "eq", "ne", "and", "or", "if",
   // Raster calculator
   "raster_calculator",
+  // AHP weighted overlay
+  "ahp",
 ] as const;
 
 const genericEntries = Object.fromEntries(

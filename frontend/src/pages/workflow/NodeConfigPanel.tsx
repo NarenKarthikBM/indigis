@@ -106,6 +106,16 @@ export default function NodeConfigPanel() {
         />
       )}
 
+      {nodeType === "ahp" && (
+        <AHPForm
+          connectedHandles={["A","B","C","D","E","F","G","H"].filter((h) =>
+            wfEdges.some((e) => e.target === node.id && e.targetHandle === h)
+          )}
+          matrix={(config as { matrix: Record<string, number> }).matrix ?? {}}
+          onChange={(matrix) => setConfig({ matrix })}
+        />
+      )}
+
       {nodeType === "raster_calculator" && (
         <RasterCalculatorForm
           expression={(config as { expression: string }).expression ?? ""}
@@ -131,7 +141,7 @@ export default function NodeConfigPanel() {
         />
       )}
 
-      {!["raster_input", "vector_input", "ndvi", "reclassify", "zonal_stats", "raster_calculator"].includes(nodeType) && (
+      {!["raster_input", "vector_input", "ndvi", "reclassify", "zonal_stats", "raster_calculator", "ahp"].includes(nodeType) && (
         <div style={{ color: "#94a3b8", fontSize: 12 }}>
           No configuration required.
         </div>
@@ -530,6 +540,210 @@ function RasterCalculatorForm({
           }}
         />
       </div>
+    </div>
+  );
+}
+
+function AHPForm({
+  connectedHandles,
+  matrix,
+  onChange,
+}: {
+  connectedHandles: string[];
+  matrix: Record<string, number>;
+  onChange: (matrix: Record<string, number>) => void;
+}) {
+  const n = connectedHandles.length;
+
+  if (n < 2) {
+    return (
+      <div style={{ fontSize: 11, color: "#475569" }}>
+        Connect at least 2 rasters (A–H) to build the comparison matrix.
+      </div>
+    );
+  }
+
+  function setValue(i: number, j: number, raw: string) {
+    const val = parseFloat(raw);
+    if (isNaN(val) || val <= 0) return;
+    const key = `${connectedHandles[i]}-${connectedHandles[j]}`;
+    onChange({ ...matrix, [key]: val });
+  }
+
+  function getValue(i: number, j: number): number {
+    const key = `${connectedHandles[i]}-${connectedHandles[j]}`;
+    return matrix[key] ?? 1;
+  }
+
+  // Geometric mean weights for live preview
+  const mat = Array.from({ length: n }, (_, i) =>
+    Array.from({ length: n }, (_, j) => {
+      if (i === j) return 1;
+      if (i < j) return getValue(i, j);
+      return 1 / getValue(j, i);
+    })
+  );
+  const rowGM = mat.map((row) => Math.pow(row.reduce((a, b) => a * b, 1), 1 / n));
+  const sumGM = rowGM.reduce((a, b) => a + b, 0);
+  const weights = rowGM.map((g) => g / sumGM);
+
+  // CR (only meaningful for n >= 3)
+  let cr: number | null = null;
+  if (n >= 3) {
+    const saatRI: Record<number, number> = { 3: 0.58, 4: 0.90, 5: 1.12, 6: 1.24, 7: 1.32, 8: 1.41 };
+    const wv = mat.map((row) => row.reduce((s, v, j) => s + v * weights[j], 0));
+    const lambdaMax = wv.reduce((s, v, i) => s + v / weights[i], 0) / n;
+    const ci = (lambdaMax - n) / (n - 1);
+    const ri = saatRI[n] ?? 1.41;
+    cr = ri > 0 ? ci / ri : 0;
+  }
+
+  const cellStyle: React.CSSProperties = {
+    width: 36,
+    height: 28,
+    background: "#0f1724",
+    border: "1px solid #253244",
+    borderRadius: 3,
+    color: "#e2e8f0",
+    fontSize: 11,
+    textAlign: "center",
+    padding: 0,
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <Label>Pairwise Comparison Matrix (1–9)</Label>
+
+      {/* Header row */}
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ borderCollapse: "collapse", fontSize: 11 }}>
+          <thead>
+            <tr>
+              <th style={{ width: 22, color: "#475569" }} />
+              {connectedHandles.map((h) => (
+                <th key={h} style={{ width: 38, color: "#f59e0b", fontWeight: 600, paddingBottom: 4 }}>
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {connectedHandles.map((rowH, i) => (
+              <tr key={rowH}>
+                <td style={{ color: "#f59e0b", fontWeight: 600, paddingRight: 6, fontSize: 11 }}>
+                  {rowH}
+                </td>
+                {connectedHandles.map((_, j) => {
+                  if (i === j) {
+                    return (
+                      <td key={j} style={{ padding: "2px 1px" }}>
+                        <div
+                          style={{
+                            ...cellStyle,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            color: "#475569",
+                            background: "#1a2535",
+                          }}
+                        >
+                          1
+                        </div>
+                      </td>
+                    );
+                  }
+                  if (i < j) {
+                    return (
+                      <td key={j} style={{ padding: "2px 1px" }}>
+                        <input
+                          type="number"
+                          min={0.111}
+                          max={9}
+                          step={0.5}
+                          defaultValue={getValue(i, j)}
+                          onBlur={(e) => setValue(i, j, e.target.value)}
+                          style={cellStyle}
+                        />
+                      </td>
+                    );
+                  }
+                  // lower triangle — reciprocal
+                  const recip = 1 / getValue(j, i);
+                  return (
+                    <td key={j} style={{ padding: "2px 1px" }}>
+                      <div
+                        style={{
+                          ...cellStyle,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          color: "#64748b",
+                          background: "#111d2e",
+                        }}
+                      >
+                        {recip < 1 ? `1/${Math.round(1 / recip)}` : recip.toFixed(1)}
+                      </div>
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div style={{ fontSize: 10, color: "#475569", lineHeight: 1.4 }}>
+        Enter values 1–9 in the upper triangle.<br />
+        9 = row criterion extremely more important than column.
+      </div>
+
+      {/* Weights preview */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+        <Label>Derived Weights</Label>
+        {connectedHandles.map((h, i) => (
+          <div key={h} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ width: 16, color: "#f59e0b", fontSize: 11, fontWeight: 600 }}>{h}</span>
+            <div
+              style={{
+                flex: 1,
+                height: 10,
+                background: "#0f1724",
+                borderRadius: 5,
+                overflow: "hidden",
+                border: "1px solid #253244",
+              }}
+            >
+              <div
+                style={{
+                  width: `${(weights[i] * 100).toFixed(1)}%`,
+                  height: "100%",
+                  background: "#f59e0b",
+                  borderRadius: 5,
+                }}
+              />
+            </div>
+            <span style={{ width: 36, fontSize: 10, color: "#94a3b8", textAlign: "right" }}>
+              {(weights[i] * 100).toFixed(1)}%
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {/* CR indicator */}
+      {cr !== null && (
+        <div
+          style={{
+            padding: "6px 8px",
+            borderRadius: 5,
+            background: cr > 0.1 ? "#7f1d1d22" : "#14532d22",
+            border: `1px solid ${cr > 0.1 ? "#ef444444" : "#22c55e44"}`,
+            fontSize: 10,
+            color: cr > 0.1 ? "#f87171" : "#4ade80",
+          }}
+        >
+          CR = {cr.toFixed(4)} {cr > 0.1 ? "— Inconsistent (> 0.1)" : "— Acceptable"}
+        </div>
+      )}
     </div>
   );
 }

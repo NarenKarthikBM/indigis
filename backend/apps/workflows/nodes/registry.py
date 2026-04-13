@@ -240,6 +240,24 @@ NODE_CATALOG = [
         ],
         "outputs": _RASTER_OUT,
     },
+    # ── AHP Weighted Overlay ──────────────────────────────────────────────────
+    {
+        "type": "ahp",
+        "label": "AHP Weighted Overlay",
+        "category": "operators",
+        "description": "Pairwise comparison matrix → weights → normalised weighted sum (0-1)",
+        "inputs": [
+            {"handle": "A", "dataType": "raster", "label": "A"},
+            {"handle": "B", "dataType": "raster", "label": "B"},
+            {"handle": "C", "dataType": "raster", "label": "C"},
+            {"handle": "D", "dataType": "raster", "label": "D"},
+            {"handle": "E", "dataType": "raster", "label": "E"},
+            {"handle": "F", "dataType": "raster", "label": "F"},
+            {"handle": "G", "dataType": "raster", "label": "G"},
+            {"handle": "H", "dataType": "raster", "label": "H"},
+        ],
+        "outputs": _RASTER_OUT,
+    },
     # ── Raster Calculator ─────────────────────────────────────────────────────
     {
         "type": "raster_calculator",
@@ -578,6 +596,8 @@ from .processing import (
     # Logical / relational
     lt_node, gt_node, le_node, ge_node, eq_node, ne_node,
     and_node, or_node, if_node,
+    # AHP weighted overlay
+    ahp_node,
     # Raster calculator
     raster_calculator_node,
     # Core processing
@@ -630,6 +650,8 @@ NODE_REGISTRY = {
     "and": and_node,
     "or": or_node,
     "if": if_node,
+    # AHP weighted overlay
+    "ahp": ahp_node,
     # Raster calculator
     "raster_calculator": raster_calculator_node,
     # Core processing
