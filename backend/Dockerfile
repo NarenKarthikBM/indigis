@@ -5,6 +5,7 @@ RUN apt-get update && apt-get install -y \
     libgdal-dev \
     libgeos-dev \
     libproj-dev \
+    libhdf4-alt-dev \
     gcc \
     g++ \
     && rm -rf /var/lib/apt/lists/*
@@ -16,7 +17,7 @@ ENV C_INCLUDE_PATH=/usr/include/gdal
 WORKDIR /app
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt --no-binary rasterio
 
 COPY . .
 
