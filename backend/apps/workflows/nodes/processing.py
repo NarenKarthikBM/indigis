@@ -84,6 +84,38 @@ def _load_raster(path: str):
         return data, src.profile, src.transform, src.crs
 
 
+def _load_raster_all_bands(path: str):
+    """Read every band from a raster. Returns (list_of_masked_arrays, profile, transform, crs)."""
+    with rasterio.open(path) as src:
+        bands = [src.read(i + 1, masked=True).astype(np.float32) for i in range(src.count)]
+        return bands, src.profile.copy(), src.transform, src.crs
+
+
+def _align_to_all_bands(ref_data: np.ndarray, ref_profile: dict,
+                         ref_transform, ref_crs, path: str) -> list:
+    """Align every band of the raster at *path* onto the reference grid."""
+    with rasterio.open(path) as src:
+        height, width = ref_data.shape
+        result = []
+        for band_idx in range(1, src.count + 1):
+            if src.crs == ref_crs and src.shape == ref_data.shape:
+                result.append(src.read(band_idx, masked=True).astype(np.float32))
+            else:
+                out = np.full((height, width), _NODATA, dtype=np.float32)
+                reproject(
+                    source=rasterio.band(src, band_idx),
+                    destination=out,
+                    src_transform=src.transform,
+                    src_crs=src.crs,
+                    dst_transform=ref_transform,
+                    dst_crs=ref_crs,
+                    dst_nodata=_NODATA,
+                    resampling=Resampling.bilinear,
+                )
+                result.append(np.ma.masked_equal(out, _NODATA))
+        return result
+
+
 def _read_bands(src, bands: list) -> list:
     return [src.read(b, masked=True).astype(np.float32) for b in bands]
 
@@ -475,24 +507,43 @@ def raster_calculator_node(inputs: dict, config: dict) -> dict:
     expression = config.get("expression")
     if not expression:
         raise ValueError("raster_calculator requires 'expression' in config")
+    if not inputs:
+        raise ValueError("raster_calculator requires at least one connected raster (A, B, or C)")
 
-    tokens = _tokenize(expression)
-    used_vars = {t for t in tokens if re.match(r"^[A-Za-z_]\w*$", t)} - _CALC_KEYWORDS
-    missing = used_vars - set(inputs.keys())
-    if missing:
-        raise ValueError(f"Missing raster inputs for variables: {missing}")
-
+    # Load first input as spatial reference
     first_key = next(iter(inputs))
-    ref_data, profile, transform, crs = _load_raster(inputs[first_key]["path"])
+    first_bands, profile, transform, crs = _load_raster_all_bands(inputs[first_key]["path"])
 
-    rasters = {first_key: ref_data}
+    # Build variable namespace: handle A with N bands → A_b1 … A_b{N}
+    # Single-band handles also get a bare alias (e.g. A == A_b1)
+    rasters: dict = {}
+
+    def _register(key: str, bands: list) -> None:
+        for i, arr in enumerate(bands):
+            rasters[f"{key}_b{i + 1}"] = arr
+        if len(bands) == 1:
+            rasters[key] = bands[0]
+
+    _register(first_key, first_bands)
+
     for k, v in inputs.items():
         if k == first_key:
             continue
-        rasters[k] = _align_to(ref_data, profile, transform, crs, v["path"])
+        bands = _align_to_all_bands(first_bands[0], profile, transform, crs, v["path"])
+        _register(k, bands)
+
+    tokens = _tokenize(expression)
+    used_vars = {t for t in tokens if re.match(r"^[A-Za-z_]\w*$", t)} - _CALC_KEYWORDS
+    missing = used_vars - set(rasters.keys())
+    if missing:
+        available = sorted(rasters.keys())
+        raise ValueError(
+            f"Unknown variable(s) in expression: {sorted(missing)}. "
+            f"Available: {available}"
+        )
 
     tree = _Parser(tokens).parse()
-    result = tree.eval({"rasters": rasters, "ref": ref_data})
+    result = tree.eval({"rasters": rasters, "ref": first_bands[0]})
 
     path = _write_raster(np.ma.filled(result, _NODATA), profile, "_calc.tif")
     return {"type": "raster", "path": path, "metadata": {}}

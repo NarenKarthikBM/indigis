@@ -13,6 +13,7 @@ const STAT_OPTIONS = ["mean", "min", "max", "count", "sum", "std", "median"];
 export default function NodeConfigPanel() {
   const selectedNodeId = useStore((s) => s.selectedNodeId);
   const wfNodes = useStore((s) => s.wfNodes);
+  const wfEdges = useStore((s) => s.wfEdges);
   const updateNodeConfig = useStore((s) => s.updateNodeConfig);
   const availableLayers = useStore((s) => s.availableLayers);
 
@@ -109,6 +110,24 @@ export default function NodeConfigPanel() {
         <RasterCalculatorForm
           expression={(config as { expression: string }).expression ?? ""}
           onChange={(expression) => setConfig({ expression })}
+          varHints={(() => {
+            const hints: { handle: string; label: string; vars: string[] }[] = [];
+            for (const handle of ["A", "B", "C"]) {
+              const edge = wfEdges.find(
+                (e) => e.target === node.id && e.targetHandle === handle
+              );
+              if (!edge) continue;
+              const srcNode = wfNodes.find((n) => n.id === edge.source);
+              if (!srcNode) continue;
+              const slug = (srcNode.data.config as Record<string, unknown>)?.layer_slug as string | undefined;
+              const layer = availableLayers.find((l) => l.slug === slug);
+              const bandCount = layer?.band_count ?? 1;
+              const vars = Array.from({ length: bandCount }, (_, i) => `${handle}_b${i + 1}`);
+              if (bandCount === 1) vars.unshift(handle);
+              hints.push({ handle, label: layer?.label ?? slug ?? handle, vars });
+            }
+            return hints;
+          })()}
         />
       )}
 
@@ -434,33 +453,82 @@ function ReclassifyForm({
 function RasterCalculatorForm({
   expression,
   onChange,
+  varHints,
 }: {
   expression: string;
   onChange: (expression: string) => void;
+  varHints: { handle: string; label: string; vars: string[] }[];
 }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <Label>Expression</Label>
-      <textarea
-        value={expression}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder="e.g. (NIR - Red) / (NIR + Red)"
-        rows={4}
-        style={{
-          width: "100%",
-          boxSizing: "border-box",
-          background: "#0f1724",
-          border: "1px solid #253244",
-          borderRadius: 5,
-          color: "#e2e8f0",
-          padding: "5px 8px",
-          fontSize: 12,
-          fontFamily: "monospace",
-          resize: "vertical",
-        }}
-      />
-      <div style={{ fontSize: 10, color: "#475569" }}>
-        Use band names as variables (e.g. NIR, Red, Green, SWIR1).
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {varHints.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <Label>Available Variables</Label>
+          {varHints.map(({ handle, label, vars }) => (
+            <div
+              key={handle}
+              style={{
+                background: "#0f1724",
+                border: "1px solid #253244",
+                borderRadius: 5,
+                padding: "6px 8px",
+              }}
+            >
+              <div style={{ fontSize: 10, color: "#f59e0b", marginBottom: 4 }}>
+                {handle} — {label}
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                {vars.map((v) => (
+                  <button
+                    key={v}
+                    onClick={() => onChange(expression ? `${expression} ${v}` : v)}
+                    title="Click to append to expression"
+                    style={{
+                      background: "#1a2535",
+                      border: "1px solid #f59e0b44",
+                      borderRadius: 3,
+                      color: "#f59e0b",
+                      padding: "2px 6px",
+                      fontSize: 10,
+                      fontFamily: "monospace",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {v}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {varHints.length === 0 && (
+        <div style={{ fontSize: 11, color: "#475569" }}>
+          Connect rasters to inputs A, B, or C to see available variables.
+        </div>
+      )}
+
+      <div>
+        <Label>Expression</Label>
+        <textarea
+          value={expression}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="e.g. (A_b4 - A_b3) / (A_b4 + A_b3)"
+          rows={4}
+          style={{
+            width: "100%",
+            boxSizing: "border-box",
+            background: "#0f1724",
+            border: "1px solid #253244",
+            borderRadius: 5,
+            color: "#e2e8f0",
+            padding: "5px 8px",
+            fontSize: 12,
+            fontFamily: "monospace",
+            resize: "vertical",
+          }}
+        />
       </div>
     </div>
   );

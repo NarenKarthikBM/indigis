@@ -245,8 +245,12 @@ NODE_CATALOG = [
         "type": "raster_calculator",
         "label": "Raster Calculator",
         "category": "operators",
-        "description": "Evaluate a raster expression (e.g. '(NIR - Red) / (NIR + Red)')",
-        "inputs": [],
+        "description": "Evaluate a band expression across one or more rasters (A_b1, A_b2, B_b1 …)",
+        "inputs": [
+            {"handle": "A", "dataType": "raster", "label": "A"},
+            {"handle": "B", "dataType": "raster", "label": "B"},
+            {"handle": "C", "dataType": "raster", "label": "C"},
+        ],
         "outputs": _RASTER_OUT,
     },
     # ── Core processing ───────────────────────────────────────────────────────
