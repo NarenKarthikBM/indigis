@@ -6,6 +6,7 @@ import ReclassifyNode from "./ReclassifyNode";
 import ClipNode from "./ClipNode";
 import ZonalStatsNode from "./ZonalStatsNode";
 import PreviewOutputNode from "./PreviewOutputNode";
+import D8FlowAccumulationNode from "./D8FlowAccumulationNode";
 import GenericNode from "./GenericNode";
 
 const GENERIC_NODE_TYPES = [
@@ -25,8 +26,6 @@ const GENERIC_NODE_TYPES = [
   "sin", "cos", "tan", "asin", "acos", "atan",
   // Logical / relational
   "lt", "gt", "le", "ge", "eq", "ne", "and", "or", "if",
-  // Terrain analysis
-  "d8_flow_accumulation",
   // Raster calculator
   "raster_calculator",
   // AHP weighted overlay
@@ -45,6 +44,7 @@ export const nodeTypes = {
   reclassify: ReclassifyNode,
   clip: ClipNode,
   zonal_stats: ZonalStatsNode,
+  d8_flow_accumulation: D8FlowAccumulationNode,
   preview_output: PreviewOutputNode,
   ...genericEntries,
 };

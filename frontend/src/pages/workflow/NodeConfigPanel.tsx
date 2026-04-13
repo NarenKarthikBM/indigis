@@ -6,6 +6,7 @@ import type {
   ReclassifyConfig,
   ReclassifyRule,
   ZonalStatsConfig,
+  D8FlowAccumulationConfig,
 } from "../../types/workflow.types";
 
 const STAT_OPTIONS = ["mean", "min", "max", "count", "sum", "std", "median"];
@@ -116,6 +117,13 @@ export default function NodeConfigPanel() {
         />
       )}
 
+      {nodeType === "d8_flow_accumulation" && (
+        <D8FlowAccumulationForm
+          config={config as D8FlowAccumulationConfig}
+          onChange={(partial) => setConfig(partial)}
+        />
+      )}
+
       {nodeType === "raster_calculator" && (
         <RasterCalculatorForm
           expression={(config as { expression: string }).expression ?? ""}
@@ -141,7 +149,7 @@ export default function NodeConfigPanel() {
         />
       )}
 
-      {!["raster_input", "vector_input", "ndvi", "reclassify", "zonal_stats", "raster_calculator", "ahp"].includes(nodeType) && (
+      {!["raster_input", "vector_input", "ndvi", "reclassify", "zonal_stats", "d8_flow_accumulation", "raster_calculator", "ahp"].includes(nodeType) && (
         <div style={{ color: "#94a3b8", fontSize: 12 }}>
           No configuration required.
         </div>
@@ -744,6 +752,34 @@ function AHPForm({
           CR = {cr.toFixed(4)} {cr > 0.1 ? "— Inconsistent (> 0.1)" : "— Acceptable"}
         </div>
       )}
+    </div>
+  );
+}
+
+function D8FlowAccumulationForm({
+  config,
+  onChange,
+}: {
+  config: D8FlowAccumulationConfig;
+  onChange: (partial: Partial<D8FlowAccumulationConfig>) => void;
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div>
+        <Label>Method</Label>
+        <Select
+          value={config.method ?? "d8"}
+          onChange={(v) => onChange({ method: v as D8FlowAccumulationConfig["method"] })}
+          options={[
+            { value: "d8", label: "D8 (no sink fill)" },
+            { value: "taudem", label: "TauDEM (sink fill)" },
+            { value: "arcgis", label: "ArcGIS (sink fill)" },
+          ]}
+        />
+      </div>
+      <div style={{ fontSize: 11, color: "#475569", lineHeight: 1.5 }}>
+        TauDEM and ArcGIS modes pre-fill sinks before computing flow direction.
+      </div>
     </div>
   );
 }

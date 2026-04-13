@@ -30,6 +30,9 @@ export interface ZonalStatsConfig {
   stats: string[];
 }
 export interface PreviewOutputConfig {}
+export interface D8FlowAccumulationConfig {
+  method?: "d8" | "taudem" | "arcgis";
+}
 
 export type NodeConfig =
   | RasterInputConfig
@@ -39,7 +42,8 @@ export type NodeConfig =
   | ReclassifyConfig
   | ClipConfig
   | ZonalStatsConfig
-  | PreviewOutputConfig;
+  | PreviewOutputConfig
+  | D8FlowAccumulationConfig;
 
 export type NodeStatus = "idle" | "running" | "completed" | "failed";
 
