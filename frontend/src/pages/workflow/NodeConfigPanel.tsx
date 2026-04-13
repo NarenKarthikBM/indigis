@@ -105,7 +105,14 @@ export default function NodeConfigPanel() {
         />
       )}
 
-      {!["raster_input", "vector_input", "ndvi", "reclassify", "zonal_stats"].includes(nodeType) && (
+      {nodeType === "raster_calculator" && (
+        <RasterCalculatorForm
+          expression={(config as { expression: string }).expression ?? ""}
+          onChange={(expression) => setConfig({ expression })}
+        />
+      )}
+
+      {!["raster_input", "vector_input", "ndvi", "reclassify", "zonal_stats", "raster_calculator"].includes(nodeType) && (
         <div style={{ color: "#94a3b8", fontSize: 12 }}>
           No configuration required.
         </div>
@@ -420,6 +427,41 @@ function ReclassifyForm({
       >
         + Add Rule
       </button>
+    </div>
+  );
+}
+
+function RasterCalculatorForm({
+  expression,
+  onChange,
+}: {
+  expression: string;
+  onChange: (expression: string) => void;
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <Label>Expression</Label>
+      <textarea
+        value={expression}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="e.g. (NIR - Red) / (NIR + Red)"
+        rows={4}
+        style={{
+          width: "100%",
+          boxSizing: "border-box",
+          background: "#0f1724",
+          border: "1px solid #253244",
+          borderRadius: 5,
+          color: "#e2e8f0",
+          padding: "5px 8px",
+          fontSize: 12,
+          fontFamily: "monospace",
+          resize: "vertical",
+        }}
+      />
+      <div style={{ fontSize: 10, color: "#475569" }}>
+        Use band names as variables (e.g. NIR, Red, Green, SWIR1).
+      </div>
     </div>
   );
 }

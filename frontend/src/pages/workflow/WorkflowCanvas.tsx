@@ -168,6 +168,8 @@ function defaultConfig(nodeType: WorkflowNodeType): Record<string, unknown> {
       return { rules: [] };
     case "zonal_stats":
       return { stats: ["mean", "min", "max", "count"] };
+    case "raster_calculator":
+      return { expression: "" };
     default:
       return {};
   }

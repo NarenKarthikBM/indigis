@@ -9,6 +9,7 @@ import PreviewOutputNode from "./PreviewOutputNode";
 import GenericNode from "./GenericNode";
 
 const GENERIC_NODE_TYPES = [
+  // Spectral indices
   "evi", "savi", "ndmi", "ndwi", "mndwi", "nbr", "bsi", "ndsi",
   "gndvi", "rdvi", "tvi", "dvi", "rvi",
   "cigreen", "cired", "ndre",
@@ -16,6 +17,16 @@ const GENERIC_NODE_TYPES = [
   "vari", "avi", "arvi",
   "ndti", "wri", "ui", "nbr2", "bai", "csi", "s3",
   "hot", "shadow_index",
+  // Arithmetic operators
+  "add", "subtract", "multiply", "divide", "power", "min", "max",
+  // Unary math
+  "abs", "sqrt", "log10", "ln",
+  // Trig
+  "sin", "cos", "tan", "asin", "acos", "atan",
+  // Logical / relational
+  "lt", "gt", "le", "ge", "eq", "ne", "and", "or", "if",
+  // Raster calculator
+  "raster_calculator",
 ] as const;
 
 const genericEntries = Object.fromEntries(

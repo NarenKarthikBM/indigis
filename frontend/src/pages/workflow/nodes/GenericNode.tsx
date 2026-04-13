@@ -21,7 +21,7 @@ export default function GenericNode({
 }: NodeProps & { data: WorkflowNodeData }) {
   const inputs: NodeHandleSpec[] = (data.inputs as NodeHandleSpec[]) ?? [];
   const outputs: NodeHandleSpec[] = (data.outputs as NodeHandleSpec[]) ?? [];
-  const category = (data.category as "input" | "processing" | "output") ?? "processing";
+  const category = (data.category as "input" | "operators" | "processing" | "output") ?? "processing";
 
   return (
     <BaseNode label={data.label} status={data.status} selected={selected} category={category}>

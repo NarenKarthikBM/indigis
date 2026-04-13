@@ -5,11 +5,12 @@ interface BaseNodeProps {
   status: NodeStatus;
   selected?: boolean;
   children?: React.ReactNode;
-  category: "input" | "processing" | "output";
+  category: "input" | "operators" | "processing" | "output";
 }
 
 const CATEGORY_ACCENT: Record<string, string> = {
   input: "#3b82f6",
+  operators: "#f59e0b",
   processing: "#8B5CF6",
   output: "#22c55e",
 };
