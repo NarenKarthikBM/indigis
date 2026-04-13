@@ -1,4 +1,6 @@
 import json
+import os
+import re
 import tempfile
 
 import numpy as np
@@ -10,35 +12,37 @@ from rasterio.warp import reproject, Resampling
 _NODATA = -9999.0
 
 
+# ── Low-level helpers ──────────────────────────────────────────────────────────
+
 def _write_raster(arr: np.ndarray, profile: dict, suffix: str) -> str:
     """Write a 2-D float32 array to a temporary GeoTIFF and return its path."""
     profile = profile.copy()
     profile.update(dtype="float32", count=1, nodata=_NODATA, compress="deflate")
-    tmp_path = tempfile.mktemp(suffix=suffix, prefix="wf_")
+    fd, tmp_path = tempfile.mkstemp(suffix=suffix, prefix="wf_")
+    os.close(fd)
     with rasterio.open(tmp_path, "w", **profile) as dst:
         dst.write(arr.astype(np.float32), 1)
     return tmp_path
 
 
-def difference_node(inputs: dict, config: dict) -> dict:
-    raster_a = inputs.get("raster_a")
-    raster_b = inputs.get("raster_b")
-    if not raster_a or not raster_b:
-        raise ValueError("difference requires 'raster_a' and 'raster_b' inputs")
+def _align_rasters(path_a: str, path_b: str):
+    """Read two rasters, reprojecting B onto A's grid if needed.
 
-    with rasterio.open(raster_a["path"]) as src_a:
+    Uses _NODATA as the fill/nodata sentinel during reprojection so that
+    legitimate zero pixel values are never mistakenly masked out.
+    """
+    with rasterio.open(path_a) as src_a:
         data_a = src_a.read(1, masked=True).astype(np.float32)
         profile = src_a.profile.copy()
         height, width = src_a.height, src_a.width
         crs_a = src_a.crs
         transform_a = src_a.transform
 
-    with rasterio.open(raster_b["path"]) as src_b:
+    with rasterio.open(path_b) as src_b:
         if src_b.crs == crs_a and src_b.width == width and src_b.height == height:
             data_b = src_b.read(1, masked=True).astype(np.float32)
         else:
-            # Reproject B onto A's grid
-            data_b_arr = np.zeros((height, width), dtype=np.float32)
+            data_b_arr = np.full((height, width), _NODATA, dtype=np.float32)
             reproject(
                 source=rasterio.band(src_b, 1),
                 destination=data_b_arr,
@@ -46,41 +50,479 @@ def difference_node(inputs: dict, config: dict) -> dict:
                 src_crs=src_b.crs,
                 dst_transform=transform_a,
                 dst_crs=crs_a,
+                dst_nodata=_NODATA,
                 resampling=Resampling.bilinear,
             )
-            data_b = np.ma.masked_equal(data_b_arr, 0)
+            data_b = np.ma.masked_equal(data_b_arr, _NODATA)
 
-    diff = data_a - data_b
-    result = np.ma.filled(diff, _NODATA).astype(np.float32)
+    return data_a, data_b, profile
 
-    path = _write_raster(result, profile, "_diff.tif")
+
+def _align_to(ref_data: np.ndarray, ref_profile: dict,
+               ref_transform, ref_crs, path: str) -> np.ma.MaskedArray:
+    with rasterio.open(path) as src:
+        if src.crs == ref_crs and src.shape == ref_data.shape:
+            return src.read(1, masked=True).astype(np.float32)
+        else:
+            out = np.full(ref_data.shape, _NODATA, dtype=np.float32)
+            reproject(
+                source=rasterio.band(src, 1),
+                destination=out,
+                src_transform=src.transform,
+                src_crs=src.crs,
+                dst_transform=ref_transform,
+                dst_crs=ref_crs,
+                dst_nodata=_NODATA,
+                resampling=Resampling.bilinear,
+            )
+            return np.ma.masked_equal(out, _NODATA)
+
+
+def _load_raster(path: str):
+    with rasterio.open(path) as src:
+        data = src.read(1, masked=True).astype(np.float32)
+        return data, src.profile, src.transform, src.crs
+
+
+def _read_bands(src, bands: list) -> list:
+    return [src.read(b, masked=True).astype(np.float32) for b in bands]
+
+
+def _read_single_band(path: str):
+    """Return (masked_array, profile) for band 1 of the raster at path."""
+    with rasterio.open(path) as src:
+        return src.read(1, masked=True).astype(np.float32), src.profile.copy()
+
+
+def _check_bands(src, *band_nums: int, node_name: str = "") -> None:
+    needed = max(band_nums)
+    if src.count < needed:
+        raise ValueError(
+            f"{node_name}: raster has {src.count} band(s) but needs band {needed}"
+        )
+
+
+def _norm_diff(a: np.ma.MaskedArray, b: np.ma.MaskedArray) -> np.ndarray:
+    """Compute (a−b)/(a+b), filling _NODATA where denominator is zero or masked."""
+    denom = np.ma.filled(a + b, 0).astype(np.float32)
+    num = np.ma.filled(a - b, 0).astype(np.float32)
+    out = np.where(denom == 0, _NODATA, num / np.where(denom == 0, 1.0, denom)).astype(np.float32)
+    out[np.ma.getmaskarray(a) | np.ma.getmaskarray(b)] = _NODATA
+    return out
+
+
+## OPERATORS
+
+# Arithmetic
+def add_node(inputs: dict, config: dict) -> dict:
+    a, b, p = _align_rasters(inputs["raster_a"]["path"], inputs["raster_b"]["path"])
+    return {"type": "raster", "path": _write_raster(np.ma.filled(a + b, _NODATA), p, "_add.tif"), "metadata": {}}
+
+
+def subtract_node(inputs: dict, config: dict) -> dict:
+    a, b, p = _align_rasters(inputs["raster_a"]["path"], inputs["raster_b"]["path"])
+    return {"type": "raster", "path": _write_raster(np.ma.filled(a - b, _NODATA), p, "_sub.tif"), "metadata": {}}
+
+
+def multiply_node(inputs: dict, config: dict) -> dict:
+    a, b, p = _align_rasters(inputs["raster_a"]["path"], inputs["raster_b"]["path"])
+    return {"type": "raster", "path": _write_raster(np.ma.filled(a * b, _NODATA), p, "_mul.tif"), "metadata": {}}
+
+
+def divide_node(inputs: dict, config: dict) -> dict:
+    a, b, p = _align_rasters(inputs["raster_a"]["path"], inputs["raster_b"]["path"])
+    combined_mask = np.ma.getmaskarray(a) | np.ma.getmaskarray(b)
+    b_f = np.ma.filled(b, 0).astype(np.float32)
+    a_f = np.ma.filled(a, _NODATA).astype(np.float32)
+    out = np.where(b_f == 0, _NODATA, a_f / np.where(b_f == 0, 1.0, b_f))
+    out[combined_mask] = _NODATA
+    return {"type": "raster", "path": _write_raster(out.astype(np.float32), p, "_div.tif"), "metadata": {}}
+
+
+def power_node(inputs: dict, config: dict) -> dict:
+    a, b, p = _align_rasters(inputs["raster_a"]["path"], inputs["raster_b"]["path"])
+    combined_mask = np.ma.getmaskarray(a) | np.ma.getmaskarray(b)
+    a_f = np.ma.filled(a, _NODATA).astype(np.float32)
+    b_f = np.ma.filled(b, _NODATA).astype(np.float32)
+    # Negative base with fractional exponent → nan; guard those pixels
+    invalid = (a_f < 0) & (b_f != np.floor(b_f))
+    out = np.where(invalid, _NODATA, np.where(invalid, 1.0, a_f) ** np.where(invalid, 1.0, b_f))
+    out[combined_mask] = _NODATA
+    return {"type": "raster", "path": _write_raster(out.astype(np.float32), p, "_pow.tif"), "metadata": {}}
+
+
+def min_node(inputs: dict, config: dict) -> dict:
+    a, b, p = _align_rasters(inputs["raster_a"]["path"], inputs["raster_b"]["path"])
+    return {"type": "raster", "path": _write_raster(np.ma.filled(np.minimum(a, b), _NODATA), p, "_min.tif"), "metadata": {}}
+
+
+def max_node(inputs: dict, config: dict) -> dict:
+    a, b, p = _align_rasters(inputs["raster_a"]["path"], inputs["raster_b"]["path"])
+    return {"type": "raster", "path": _write_raster(np.ma.filled(np.maximum(a, b), _NODATA), p, "_max.tif"), "metadata": {}}
+
+
+# Unary math
+def abs_node(inputs: dict, config: dict) -> dict:
+    a, p = _read_single_band(inputs["raster"]["path"])
+    return {"type": "raster", "path": _write_raster(np.ma.filled(np.abs(a), _NODATA), p, "_abs.tif"), "metadata": {}}
+
+
+def sqrt_node(inputs: dict, config: dict) -> dict:
+    a, p = _read_single_band(inputs["raster"]["path"])
+    a_f = np.ma.filled(a, _NODATA).astype(np.float32)
+    safe = np.where(a_f >= 0, a_f, 0.0)
+    out = np.where(a_f >= 0, np.sqrt(safe), _NODATA)
+    out[np.ma.getmaskarray(a)] = _NODATA
+    return {"type": "raster", "path": _write_raster(out.astype(np.float32), p, "_sqrt.tif"), "metadata": {}}
+
+
+def log10_node(inputs: dict, config: dict) -> dict:
+    a, p = _read_single_band(inputs["raster"]["path"])
+    a_f = np.ma.filled(a, _NODATA).astype(np.float32)
+    safe = np.where(a_f > 0, a_f, 1.0)
+    out = np.where(a_f > 0, np.log10(safe), _NODATA)
+    out[np.ma.getmaskarray(a)] = _NODATA
+    return {"type": "raster", "path": _write_raster(out.astype(np.float32), p, "_log10.tif"), "metadata": {}}
+
+
+def ln_node(inputs: dict, config: dict) -> dict:
+    a, p = _read_single_band(inputs["raster"]["path"])
+    a_f = np.ma.filled(a, _NODATA).astype(np.float32)
+    safe = np.where(a_f > 0, a_f, 1.0)
+    out = np.where(a_f > 0, np.log(safe), _NODATA)
+    out[np.ma.getmaskarray(a)] = _NODATA
+    return {"type": "raster", "path": _write_raster(out.astype(np.float32), p, "_ln.tif"), "metadata": {}}
+
+
+# Trigonometric
+_TRIG_FUNCS = {
+    "sin": np.sin, "cos": np.cos, "tan": np.tan,
+    "arcsin": np.arcsin, "arccos": np.arccos, "arctan": np.arctan,
+}
+
+
+def _unary_trig(inputs: dict, fn: str) -> dict:
+    a, p = _read_single_band(inputs["raster"]["path"])
+    f = _TRIG_FUNCS[fn]
+    return {"type": "raster", "path": _write_raster(np.ma.filled(f(a), _NODATA), p, f"_{fn}.tif"), "metadata": {}}
+
+
+def sin_node(inputs: dict, config: dict) -> dict: return _unary_trig(inputs, "sin")
+def cos_node(inputs: dict, config: dict) -> dict: return _unary_trig(inputs, "cos")
+def tan_node(inputs: dict, config: dict) -> dict: return _unary_trig(inputs, "tan")
+def asin_node(inputs: dict, config: dict) -> dict: return _unary_trig(inputs, "arcsin")
+def acos_node(inputs: dict, config: dict) -> dict: return _unary_trig(inputs, "arccos")
+def atan_node(inputs: dict, config: dict) -> dict: return _unary_trig(inputs, "arctan")
+
+
+# Logical / relational
+_LOGIC_OPS = {
+    "<": np.less, ">": np.greater,
+    "<=": np.less_equal, ">=": np.greater_equal,
+    "==": np.equal, "!=": np.not_equal,
+}
+
+
+def _binary_logic(inputs: dict, op: str, suffix: str) -> dict:
+    a, b, p = _align_rasters(inputs["raster_a"]["path"], inputs["raster_b"]["path"])
+    combined_mask = np.ma.getmaskarray(a) | np.ma.getmaskarray(b)
+    res = _LOGIC_OPS[op](np.ma.filled(a, 0), np.ma.filled(b, 0)).astype(np.float32)
+    res[combined_mask] = _NODATA
+    return {"type": "raster", "path": _write_raster(res, p, suffix), "metadata": {}}
+
+
+def lt_node(inputs: dict, config: dict) -> dict: return _binary_logic(inputs, "<", "_lt.tif")
+def gt_node(inputs: dict, config: dict) -> dict: return _binary_logic(inputs, ">", "_gt.tif")
+def le_node(inputs: dict, config: dict) -> dict: return _binary_logic(inputs, "<=", "_le.tif")
+def ge_node(inputs: dict, config: dict) -> dict: return _binary_logic(inputs, ">=", "_ge.tif")
+def eq_node(inputs: dict, config: dict) -> dict: return _binary_logic(inputs, "==", "_eq.tif")
+def ne_node(inputs: dict, config: dict) -> dict: return _binary_logic(inputs, "!=", "_ne.tif")
+
+
+def and_node(inputs: dict, config: dict) -> dict:
+    a, b, p = _align_rasters(inputs["raster_a"]["path"], inputs["raster_b"]["path"])
+    combined_mask = np.ma.getmaskarray(a) | np.ma.getmaskarray(b)
+    res = np.logical_and(np.ma.filled(a, 0), np.ma.filled(b, 0)).astype(np.float32)
+    res[combined_mask] = _NODATA
+    return {"type": "raster", "path": _write_raster(res, p, "_and.tif"), "metadata": {}}
+
+
+def or_node(inputs: dict, config: dict) -> dict:
+    a, b, p = _align_rasters(inputs["raster_a"]["path"], inputs["raster_b"]["path"])
+    combined_mask = np.ma.getmaskarray(a) | np.ma.getmaskarray(b)
+    res = np.logical_or(np.ma.filled(a, 0), np.ma.filled(b, 0)).astype(np.float32)
+    res[combined_mask] = _NODATA
+    return {"type": "raster", "path": _write_raster(res, p, "_or.tif"), "metadata": {}}
+
+
+def if_node(inputs: dict, config: dict) -> dict:
+    cond, true_r, p = _align_rasters(inputs["condition"]["path"], inputs["true"]["path"])
+    _, false_r, _ = _align_rasters(inputs["condition"]["path"], inputs["false"]["path"])
+    combined_mask = np.ma.getmaskarray(cond) | np.ma.getmaskarray(true_r) | np.ma.getmaskarray(false_r)
+    res = np.where(np.ma.filled(cond, 0) > 0, np.ma.filled(true_r, _NODATA), np.ma.filled(false_r, _NODATA))
+    res[combined_mask] = _NODATA
+    return {"type": "raster", "path": _write_raster(res.astype(np.float32), p, "_if.tif"), "metadata": {}}
+
+
+## RASTER CALCULATOR
+
+def _calc_safe_div(a: np.ma.MaskedArray, b: np.ma.MaskedArray) -> np.ma.MaskedArray:
+    b_data = np.ma.getdata(b).astype(np.float32)
+    a_data = np.ma.getdata(a).astype(np.float32)
+    zero = b_data == 0
+    result = np.where(zero, 0.0, a_data) / np.where(zero, 1.0, b_data)
+    mask = np.ma.getmaskarray(a) | np.ma.getmaskarray(b) | zero
+    return np.ma.array(result, mask=mask)
+
+
+class _Node:
+    def eval(self, ctx): raise NotImplementedError()
+
+
+class _RasterNode(_Node):
+    def __init__(self, key: str): self.key = key
+
+    def eval(self, ctx): return ctx["rasters"][self.key]
+
+
+class _ConstantNode(_Node):
+    def __init__(self, value: float): self.value = np.float32(value)
+
+    def eval(self, ctx):
+        ref = ctx["ref"]
+        mask = np.ma.getmaskarray(ref)  # works for both masked and nomask cases
+        return np.ma.array(np.full(ref.shape, self.value, dtype=np.float32), mask=mask)
+
+
+class _UnaryNode(_Node):
+    def __init__(self, func, child): self.func = func; self.child = child
+
+    def eval(self, ctx):
+        a = self.child.eval(ctx)
+        return np.ma.array(self.func(np.ma.getdata(a)), mask=np.ma.getmaskarray(a))
+
+
+class _BinaryNode(_Node):
+    def __init__(self, func, left, right): self.func = func; self.left = left; self.right = right
+
+    def eval(self, ctx):
+        a = self.left.eval(ctx)
+        b = self.right.eval(ctx)
+        result = self.func(a, b)
+        # Combine input masks with any extra mask added by the function (e.g. safe div)
+        combined = np.ma.getmaskarray(a) | np.ma.getmaskarray(b) | np.ma.getmaskarray(result)
+        return np.ma.array(np.ma.getdata(result), mask=combined)
+
+
+class _IfNode(_Node):
+    def __init__(self, cond, true_expr, false_expr):
+        self.cond = cond; self.true_expr = true_expr; self.false_expr = false_expr
+
+    def eval(self, ctx):
+        cond = self.cond.eval(ctx)
+        t = self.true_expr.eval(ctx)
+        f = self.false_expr.eval(ctx)
+        mask = np.ma.getmaskarray(cond) | np.ma.getmaskarray(t) | np.ma.getmaskarray(f)
+        res = np.where(np.ma.getdata(cond) > 0, np.ma.getdata(t), np.ma.getdata(f))
+        return np.ma.array(res, mask=mask)
+
+
+_CALC_OPS = {
+    "+": lambda a, b: a + b,
+    "-": lambda a, b: a - b,
+    "*": lambda a, b: a * b,
+    "/": _calc_safe_div,
+    "^": lambda a, b: a ** b,
+    "<": lambda a, b: np.less(np.ma.getdata(a), np.ma.getdata(b)),
+    ">": lambda a, b: np.greater(np.ma.getdata(a), np.ma.getdata(b)),
+    "<=": lambda a, b: np.less_equal(np.ma.getdata(a), np.ma.getdata(b)),
+    ">=": lambda a, b: np.greater_equal(np.ma.getdata(a), np.ma.getdata(b)),
+    "==": lambda a, b: np.equal(np.ma.getdata(a), np.ma.getdata(b)),
+    "!=": lambda a, b: np.not_equal(np.ma.getdata(a), np.ma.getdata(b)),
+    "AND": lambda a, b: np.logical_and(np.ma.getdata(a), np.ma.getdata(b)),
+    "OR":  lambda a, b: np.logical_or(np.ma.getdata(a), np.ma.getdata(b)),
+}
+
+_CALC_FUNCS = {
+    "sin": np.sin, "cos": np.cos, "tan": np.tan,
+    "asin": np.arcsin, "acos": np.arccos, "atan": np.arctan,
+    "sqrt": np.sqrt, "log10": np.log10, "ln": np.log, "abs": np.abs,
+}
+
+# Keywords that are not variable names
+_CALC_KEYWORDS = set(_CALC_FUNCS.keys()) | {"IF", "AND", "OR"}
+
+
+def _tokenize(expr: str) -> list:
+    """Tokenize a raster calculator expression.
+
+    Handles multi-character operators (<=, >=, ==, !=), parentheses, commas,
+    numbers (including negative literals like -3.5), and identifiers.
+    """
+    token_re = re.compile(
+        r"<=|>=|==|!=|[+\-*/^<>(),]"   # operators and punctuation
+        r"|\d+\.?\d*(?:[eE][+\-]?\d+)?" # numbers (incl. scientific notation)
+        r"|[A-Za-z_]\w*"                 # identifiers
+    )
+    return token_re.findall(expr)
+
+
+class _Parser:
+    def __init__(self, tokens: list):
+        self.tokens = tokens
+        self.pos = 0
+
+    def peek(self) -> str | None:
+        return self.tokens[self.pos] if self.pos < len(self.tokens) else None
+
+    def consume(self) -> str:
+        tok = self.peek()
+        self.pos += 1
+        return tok
+
+    def parse(self) -> _Node:
+        node = self.parse_expr()
+        if self.peek() is not None:
+            raise ValueError(f"Unexpected token: {self.peek()!r}")
+        return node
+
+    def parse_expr(self) -> _Node:
+        node = self.parse_term()
+        while self.peek() in ("+", "-", "OR"):
+            op = self.consume()
+            node = _BinaryNode(_CALC_OPS[op], node, self.parse_term())
+        return node
+
+    def parse_term(self) -> _Node:
+        node = self.parse_factor()
+        while self.peek() in ("*", "/", "AND"):
+            op = self.consume()
+            node = _BinaryNode(_CALC_OPS[op], node, self.parse_factor())
+        return node
+
+    def parse_factor(self) -> _Node:
+        node = self.parse_power()
+        while self.peek() in ("<", ">", "<=", ">=", "==", "!="):
+            op = self.consume()
+            node = _BinaryNode(_CALC_OPS[op], node, self.parse_power())
+        return node
+
+    def parse_power(self) -> _Node:
+        node = self.parse_atom()
+        if self.peek() == "^":
+            self.consume()
+            node = _BinaryNode(_CALC_OPS["^"], node, self.parse_atom())
+        return node
+
+    def parse_atom(self) -> _Node:
+        tok = self.peek()
+        if tok is None:
+            raise ValueError("Unexpected end of expression")
+
+        # Unary minus
+        if tok == "-":
+            self.consume()
+            child = self.parse_atom()
+            return _UnaryNode(lambda x: -x, child)
+
+        # Parentheses
+        if tok == "(":
+            self.consume()
+            node = self.parse_expr()
+            if self.consume() != ")":
+                raise ValueError("Missing ')'")
+            return node
+
+        # IF
+        if tok == "IF":
+            return self._parse_if()
+
+        # Named function
+        if tok in _CALC_FUNCS:
+            func = self.consume()
+            if self.consume() != "(":
+                raise ValueError(f"{func} missing '('")
+            arg = self.parse_expr()
+            if self.consume() != ")":
+                raise ValueError(f"{func} missing ')'")
+            return _UnaryNode(_CALC_FUNCS[func], arg)
+
+        # Number literal
+        if re.match(r"^\d+\.?\d*(?:[eE][+\-]?\d+)?$", tok):
+            self.consume()
+            return _ConstantNode(float(tok))
+
+        # Variable / raster name
+        if re.match(r"^[A-Za-z_]\w*$", tok):
+            self.consume()
+            return _RasterNode(tok)
+
+        raise ValueError(f"Invalid token: {tok!r}")
+
+    def _parse_if(self) -> _IfNode:
+        self.consume()  # "IF"
+        if self.consume() != "(": raise ValueError("IF missing '('")
+        cond = self.parse_expr()
+        if self.consume() != ",": raise ValueError("IF missing first ','")
+        t = self.parse_expr()
+        if self.consume() != ",": raise ValueError("IF missing second ','")
+        f = self.parse_expr()
+        if self.consume() != ")": raise ValueError("IF missing ')'")
+        return _IfNode(cond, t, f)
+
+
+def raster_calculator_node(inputs: dict, config: dict) -> dict:
+    expression = config.get("expression")
+    if not expression:
+        raise ValueError("raster_calculator requires 'expression' in config")
+
+    tokens = _tokenize(expression)
+    used_vars = {t for t in tokens if re.match(r"^[A-Za-z_]\w*$", t)} - _CALC_KEYWORDS
+    missing = used_vars - set(inputs.keys())
+    if missing:
+        raise ValueError(f"Missing raster inputs for variables: {missing}")
+
+    first_key = next(iter(inputs))
+    ref_data, profile, transform, crs = _load_raster(inputs[first_key]["path"])
+
+    rasters = {first_key: ref_data}
+    for k, v in inputs.items():
+        if k == first_key:
+            continue
+        rasters[k] = _align_to(ref_data, profile, transform, crs, v["path"])
+
+    tree = _Parser(tokens).parse()
+    result = tree.eval({"rasters": rasters, "ref": ref_data})
+
+    path = _write_raster(np.ma.filled(result, _NODATA), profile, "_calc.tif")
     return {"type": "raster", "path": path, "metadata": {}}
 
+
+## CORE PROCESSING
+
+def difference_node(inputs: dict, config: dict) -> dict:
+    raster_a = inputs.get("raster_a")
+    raster_b = inputs.get("raster_b")
+    if not raster_a or not raster_b:
+        raise ValueError("difference requires 'raster_a' and 'raster_b' inputs")
+    a, b, p = _align_rasters(raster_a["path"], raster_b["path"])
+    return {"type": "raster", "path": _write_raster(np.ma.filled(a - b, _NODATA), p, "_diff.tif"), "metadata": {}}
+
+
+## SPECTRAL INDICES – Vegetation
 
 def ndvi_node(inputs: dict, config: dict) -> dict:
     raster_in = inputs.get("raster_in")
     if not raster_in:
         raise ValueError("ndvi requires 'raster_in' input")
-
-    nir_band = int(config.get("nir_band", 4))
-    red_band = int(config.get("red_band", 3))
-
+    nir_band = int(config.get("nir_band", 5))
+    red_band = int(config.get("red_band", 4))
     with rasterio.open(raster_in["path"]) as src:
-        if src.count < max(nir_band, red_band):
-            raise ValueError(
-                f"Raster has {src.count} bands; NDVI needs bands {red_band} (Red) and {nir_band} (NIR)"
-            )
+        _check_bands(src, nir_band, red_band, node_name="ndvi")
         nir = src.read(nir_band, masked=True).astype(np.float32)
         red = src.read(red_band, masked=True).astype(np.float32)
         profile = src.profile.copy()
-
-    denom = nir + red
-    ndvi = np.where(denom == 0, _NODATA, (nir - red) / denom).astype(np.float32)
-    # Propagate mask
-    combined_mask = np.ma.getmaskarray(nir) | np.ma.getmaskarray(red)
-    ndvi[combined_mask] = _NODATA
-
-    path = _write_raster(ndvi, profile, "_ndvi.tif")
+    path = _write_raster(_norm_diff(nir, red), profile, "_ndvi.tif")
     return {"type": "raster", "path": path, "metadata": {}}
 
 
@@ -88,24 +530,20 @@ def evi_node(inputs: dict, config: dict) -> dict:
     raster_in = inputs.get("raster_in")
     if not raster_in:
         raise ValueError("evi requires 'raster_in' input")
-
     nir_band = int(config.get("nir_band", 5))
     red_band = int(config.get("red_band", 4))
     blue_band = int(config.get("blue_band", 2))
-
     with rasterio.open(raster_in["path"]) as src:
+        _check_bands(src, nir_band, red_band, blue_band, node_name="evi")
         nir = src.read(nir_band, masked=True).astype(np.float32)
         red = src.read(red_band, masked=True).astype(np.float32)
         blue = src.read(blue_band, masked=True).astype(np.float32)
         profile = src.profile.copy()
-
-    denom = nir + 6 * red - 7.5 * blue + 1
-    evi = np.where(denom == 0, _NODATA, 2.5 * (nir - red) / denom).astype(np.float32)
-
-    combined_mask = np.ma.getmaskarray(nir) | np.ma.getmaskarray(red) | np.ma.getmaskarray(blue)
-    evi[combined_mask] = _NODATA
-
-    path = _write_raster(evi, profile, "_evi.tif")
+    denom = np.ma.filled(nir + 6 * red - 7.5 * blue + 1, 0).astype(np.float32)
+    num = np.ma.filled(2.5 * (nir - red), 0).astype(np.float32)
+    out = np.where(denom == 0, _NODATA, num / np.where(denom == 0, 1.0, denom)).astype(np.float32)
+    out[np.ma.getmaskarray(nir) | np.ma.getmaskarray(red) | np.ma.getmaskarray(blue)] = _NODATA
+    path = _write_raster(out, profile, "_evi.tif")
     return {"type": "raster", "path": path, "metadata": {}}
 
 
@@ -113,46 +551,274 @@ def savi_node(inputs: dict, config: dict) -> dict:
     raster_in = inputs.get("raster_in")
     if not raster_in:
         raise ValueError("savi requires 'raster_in' input")
-
     nir_band = int(config.get("nir_band", 5))
     red_band = int(config.get("red_band", 4))
     L = float(config.get("L", 0.5))
-
     with rasterio.open(raster_in["path"]) as src:
+        _check_bands(src, nir_band, red_band, node_name="savi")
         nir = src.read(nir_band, masked=True).astype(np.float32)
         red = src.read(red_band, masked=True).astype(np.float32)
         profile = src.profile.copy()
-
-    denom = nir + red + L
-    savi = np.where(denom == 0, _NODATA, ((nir - red) * (1 + L)) / denom).astype(np.float32)
-
-    combined_mask = np.ma.getmaskarray(nir) | np.ma.getmaskarray(red)
-    savi[combined_mask] = _NODATA
-
-    path = _write_raster(savi, profile, "_savi.tif")
+    denom = np.ma.filled(nir + red + L, 0).astype(np.float32)
+    num = np.ma.filled((nir - red) * (1 + L), 0).astype(np.float32)
+    out = np.where(denom == 0, _NODATA, num / np.where(denom == 0, 1.0, denom)).astype(np.float32)
+    out[np.ma.getmaskarray(nir) | np.ma.getmaskarray(red)] = _NODATA
+    path = _write_raster(out, profile, "_savi.tif")
     return {"type": "raster", "path": path, "metadata": {}}
 
+
+def gndvi_node(inputs: dict, config: dict) -> dict:
+    raster_in = inputs.get("raster_in")
+    if not raster_in:
+        raise ValueError("gndvi requires 'raster_in' input")
+    nir_band = int(config.get("nir_band", 5))
+    green_band = int(config.get("green_band", 3))
+    with rasterio.open(raster_in["path"]) as src:
+        _check_bands(src, nir_band, green_band, node_name="gndvi")
+        nir, green = _read_bands(src, [nir_band, green_band])
+        profile = src.profile.copy()
+    path = _write_raster(_norm_diff(nir, green), profile, "_gndvi.tif")
+    return {"type": "raster", "path": path, "metadata": {}}
+
+
+def rdvi_node(inputs: dict, config: dict) -> dict:
+    raster_in = inputs.get("raster_in")
+    if not raster_in:
+        raise ValueError("rdvi requires 'raster_in' input")
+    nir_band = int(config.get("nir_band", 5))
+    red_band = int(config.get("red_band", 4))
+    with rasterio.open(raster_in["path"]) as src:
+        _check_bands(src, nir_band, red_band, node_name="rdvi")
+        nir, red = _read_bands(src, [nir_band, red_band])
+        profile = src.profile.copy()
+    sum_nr = np.ma.filled(nir + red, 0).astype(np.float32)
+    safe_sum = np.maximum(sum_nr, 0.0)
+    denom = np.sqrt(safe_sum)
+    num = np.ma.filled(nir - red, 0).astype(np.float32)
+    out = np.where(denom == 0, _NODATA, num / np.where(denom == 0, 1.0, denom)).astype(np.float32)
+    out[np.ma.getmaskarray(nir) | np.ma.getmaskarray(red)] = _NODATA
+    path = _write_raster(out, profile, "_rdvi.tif")
+    return {"type": "raster", "path": path, "metadata": {}}
+
+
+def tvi_node(inputs: dict, config: dict) -> dict:
+    raster_in = inputs.get("raster_in")
+    if not raster_in:
+        raise ValueError("tvi requires 'raster_in' input")
+    nir_band = int(config.get("nir_band", 5))
+    red_band = int(config.get("red_band", 4))
+    with rasterio.open(raster_in["path"]) as src:
+        _check_bands(src, nir_band, red_band, node_name="tvi")
+        nir, red = _read_bands(src, [nir_band, red_band])
+        profile = src.profile.copy()
+    combined_mask = np.ma.getmaskarray(nir) | np.ma.getmaskarray(red)
+    denom = np.ma.filled(nir + red, 0).astype(np.float32)
+    num = np.ma.filled(nir - red, 0).astype(np.float32)
+    ndvi = np.where(denom == 0, _NODATA, num / np.where(denom == 0, 1.0, denom))
+    tvi_arg = ndvi + 0.5
+    safe_arg = np.where(tvi_arg >= 0, tvi_arg, 0.0)
+    out = np.where((tvi_arg < 0) | (ndvi == _NODATA), _NODATA, np.sqrt(safe_arg)).astype(np.float32)
+    out[combined_mask] = _NODATA
+    path = _write_raster(out, profile, "_tvi.tif")
+    return {"type": "raster", "path": path, "metadata": {}}
+
+
+def dvi_node(inputs: dict, config: dict) -> dict:
+    raster_in = inputs.get("raster_in")
+    if not raster_in:
+        raise ValueError("dvi requires 'raster_in' input")
+    nir_band = int(config.get("nir_band", 5))
+    red_band = int(config.get("red_band", 4))
+    with rasterio.open(raster_in["path"]) as src:
+        _check_bands(src, nir_band, red_band, node_name="dvi")
+        nir, red = _read_bands(src, [nir_band, red_band])
+        profile = src.profile.copy()
+    out = np.ma.filled(nir - red, _NODATA).astype(np.float32)
+    out[np.ma.getmaskarray(nir) | np.ma.getmaskarray(red)] = _NODATA
+    path = _write_raster(out, profile, "_dvi.tif")
+    return {"type": "raster", "path": path, "metadata": {}}
+
+
+def rvi_node(inputs: dict, config: dict) -> dict:
+    raster_in = inputs.get("raster_in")
+    if not raster_in:
+        raise ValueError("rvi requires 'raster_in' input")
+    nir_band = int(config.get("nir_band", 5))
+    red_band = int(config.get("red_band", 4))
+    with rasterio.open(raster_in["path"]) as src:
+        _check_bands(src, nir_band, red_band, node_name="rvi")
+        nir, red = _read_bands(src, [nir_band, red_band])
+        profile = src.profile.copy()
+    red_f = np.ma.filled(red, 0).astype(np.float32)
+    nir_f = np.ma.filled(nir, _NODATA).astype(np.float32)
+    out = np.where(red_f == 0, _NODATA, nir_f / np.where(red_f == 0, 1.0, red_f)).astype(np.float32)
+    out[np.ma.getmaskarray(nir) | np.ma.getmaskarray(red)] = _NODATA
+    path = _write_raster(out, profile, "_rvi.tif")
+    return {"type": "raster", "path": path, "metadata": {}}
+
+
+def vari_node(inputs: dict, config: dict) -> dict:
+    raster_in = inputs.get("raster_in")
+    if not raster_in:
+        raise ValueError("vari requires 'raster_in' input")
+    green_band = int(config.get("green_band", 3))
+    red_band = int(config.get("red_band", 4))
+    blue_band = int(config.get("blue_band", 2))
+    with rasterio.open(raster_in["path"]) as src:
+        _check_bands(src, green_band, red_band, blue_band, node_name="vari")
+        green, red, blue = _read_bands(src, [green_band, red_band, blue_band])
+        profile = src.profile.copy()
+    denom = np.ma.filled(green + red - blue, 0).astype(np.float32)
+    num = np.ma.filled(green - red, 0).astype(np.float32)
+    out = np.where(denom == 0, _NODATA, num / np.where(denom == 0, 1.0, denom)).astype(np.float32)
+    out[np.ma.getmaskarray(green) | np.ma.getmaskarray(red) | np.ma.getmaskarray(blue)] = _NODATA
+    path = _write_raster(out, profile, "_vari.tif")
+    return {"type": "raster", "path": path, "metadata": {}}
+
+
+def avi_node(inputs: dict, config: dict) -> dict:
+    raster_in = inputs.get("raster_in")
+    if not raster_in:
+        raise ValueError("avi requires 'raster_in' input")
+    nir_band = int(config.get("nir_band", 5))
+    red_band = int(config.get("red_band", 4))
+    with rasterio.open(raster_in["path"]) as src:
+        _check_bands(src, nir_band, red_band, node_name="avi")
+        nir, red = _read_bands(src, [nir_band, red_band])
+        profile = src.profile.copy()
+    out = np.cbrt(np.ma.filled(nir * (1 - red) * (nir - red), _NODATA)).astype(np.float32)
+    out[np.ma.getmaskarray(nir) | np.ma.getmaskarray(red)] = _NODATA
+    path = _write_raster(out, profile, "_avi.tif")
+    return {"type": "raster", "path": path, "metadata": {}}
+
+
+def arvi_node(inputs: dict, config: dict) -> dict:
+    raster_in = inputs.get("raster_in")
+    if not raster_in:
+        raise ValueError("arvi requires 'raster_in' input")
+    nir_band = int(config.get("nir_band", 5))
+    red_band = int(config.get("red_band", 4))
+    blue_band = int(config.get("blue_band", 2))
+    with rasterio.open(raster_in["path"]) as src:
+        _check_bands(src, nir_band, red_band, blue_band, node_name="arvi")
+        nir, red, blue = _read_bands(src, [nir_band, red_band, blue_band])
+        profile = src.profile.copy()
+    rb = np.ma.filled(2 * red - blue, 0).astype(np.float32)
+    nir_f = np.ma.filled(nir, 0).astype(np.float32)
+    denom = nir_f + rb
+    out = np.where(denom == 0, _NODATA, (nir_f - rb) / np.where(denom == 0, 1.0, denom)).astype(np.float32)
+    out[np.ma.getmaskarray(nir) | np.ma.getmaskarray(red) | np.ma.getmaskarray(blue)] = _NODATA
+    path = _write_raster(out, profile, "_arvi.tif")
+    return {"type": "raster", "path": path, "metadata": {}}
+
+
+## SPECTRAL INDICES – Chlorophyll
+
+def cigreen_node(inputs: dict, config: dict) -> dict:
+    raster_in = inputs.get("raster_in")
+    if not raster_in:
+        raise ValueError("cigreen requires 'raster_in' input")
+    nir_band = int(config.get("nir_band", 5))
+    green_band = int(config.get("green_band", 3))
+    with rasterio.open(raster_in["path"]) as src:
+        _check_bands(src, nir_band, green_band, node_name="cigreen")
+        nir, green = _read_bands(src, [nir_band, green_band])
+        profile = src.profile.copy()
+    green_f = np.ma.filled(green, 0).astype(np.float32)
+    nir_f = np.ma.filled(nir, _NODATA).astype(np.float32)
+    out = np.where(green_f == 0, _NODATA, nir_f / np.where(green_f == 0, 1.0, green_f) - 1).astype(np.float32)
+    out[np.ma.getmaskarray(nir) | np.ma.getmaskarray(green)] = _NODATA
+    path = _write_raster(out, profile, "_cigreen.tif")
+    return {"type": "raster", "path": path, "metadata": {}}
+
+
+def cired_node(inputs: dict, config: dict) -> dict:
+    raster_in = inputs.get("raster_in")
+    if not raster_in:
+        raise ValueError("cired requires 'raster_in' input")
+    nir_band = int(config.get("nir_band", 5))
+    red_band = int(config.get("red_band", 4))
+    with rasterio.open(raster_in["path"]) as src:
+        _check_bands(src, nir_band, red_band, node_name="cired")
+        nir, red = _read_bands(src, [nir_band, red_band])
+        profile = src.profile.copy()
+    red_f = np.ma.filled(red, 0).astype(np.float32)
+    nir_f = np.ma.filled(nir, _NODATA).astype(np.float32)
+    out = np.where(red_f == 0, _NODATA, nir_f / np.where(red_f == 0, 1.0, red_f) - 1).astype(np.float32)
+    out[np.ma.getmaskarray(nir) | np.ma.getmaskarray(red)] = _NODATA
+    path = _write_raster(out, profile, "_cired.tif")
+    return {"type": "raster", "path": path, "metadata": {}}
+
+
+def ndre_node(inputs: dict, config: dict) -> dict:
+    raster_in = inputs.get("raster_in")
+    if not raster_in:
+        raise ValueError("ndre requires 'raster_in' input")
+    nir_band = int(config.get("nir_band", 5))
+    red_edge_band = int(config.get("red_edge_band", 6))
+    with rasterio.open(raster_in["path"]) as src:
+        _check_bands(src, nir_band, red_edge_band, node_name="ndre")
+        nir, red_edge = _read_bands(src, [nir_band, red_edge_band])
+        profile = src.profile.copy()
+    path = _write_raster(_norm_diff(nir, red_edge), profile, "_ndre.tif")
+    return {"type": "raster", "path": path, "metadata": {}}
+
+
+## SPECTRAL INDICES – Soil adjusted
+
+def osavi_node(inputs: dict, config: dict) -> dict:
+    raster_in = inputs.get("raster_in")
+    if not raster_in:
+        raise ValueError("osavi requires 'raster_in' input")
+    nir_band = int(config.get("nir_band", 5))
+    red_band = int(config.get("red_band", 4))
+    with rasterio.open(raster_in["path"]) as src:
+        _check_bands(src, nir_band, red_band, node_name="osavi")
+        nir, red = _read_bands(src, [nir_band, red_band])
+        profile = src.profile.copy()
+    denom = np.ma.filled(nir + red + 0.16, 0).astype(np.float32)
+    num = np.ma.filled(nir - red, 0).astype(np.float32)
+    out = np.where(denom == 0, _NODATA, num / np.where(denom == 0, 1.0, denom)).astype(np.float32)
+    out[np.ma.getmaskarray(nir) | np.ma.getmaskarray(red)] = _NODATA
+    path = _write_raster(out, profile, "_osavi.tif")
+    return {"type": "raster", "path": path, "metadata": {}}
+
+
+def tsavi_node(inputs: dict, config: dict) -> dict:
+    raster_in = inputs.get("raster_in")
+    if not raster_in:
+        raise ValueError("tsavi requires 'raster_in' input")
+    nir_band = int(config.get("nir_band", 5))
+    red_band = int(config.get("red_band", 4))
+    a = float(config.get("a", 1))
+    b = float(config.get("b", 0))
+    with rasterio.open(raster_in["path"]) as src:
+        _check_bands(src, nir_band, red_band, node_name="tsavi")
+        nir, red = _read_bands(src, [nir_band, red_band])
+        profile = src.profile.copy()
+    nir_f = np.ma.filled(nir, 0).astype(np.float32)
+    red_f = np.ma.filled(red, 0).astype(np.float32)
+    denom = red_f + a * nir_f - a * b
+    out = np.where(denom == 0, _NODATA, a * (nir_f - a * red_f - b) / np.where(denom == 0, 1.0, denom)).astype(np.float32)
+    out[np.ma.getmaskarray(nir) | np.ma.getmaskarray(red)] = _NODATA
+    path = _write_raster(out, profile, "_tsavi.tif")
+    return {"type": "raster", "path": path, "metadata": {}}
+
+
+## SPECTRAL INDICES – Moisture / Water
 
 def ndmi_node(inputs: dict, config: dict) -> dict:
     raster_in = inputs.get("raster_in")
     if not raster_in:
         raise ValueError("ndmi requires 'raster_in' input")
-
     nir_band = int(config.get("nir_band", 5))
     swir_band = int(config.get("swir_band", 6))
-
     with rasterio.open(raster_in["path"]) as src:
+        _check_bands(src, nir_band, swir_band, node_name="ndmi")
         nir = src.read(nir_band, masked=True).astype(np.float32)
         swir = src.read(swir_band, masked=True).astype(np.float32)
         profile = src.profile.copy()
-
-    denom = nir + swir
-    ndmi = np.where(denom == 0, _NODATA, (nir - swir) / denom).astype(np.float32)
-
-    combined_mask = np.ma.getmaskarray(nir) | np.ma.getmaskarray(swir)
-    ndmi[combined_mask] = _NODATA
-
-    path = _write_raster(ndmi, profile, "_ndmi.tif")
+    path = _write_raster(_norm_diff(nir, swir), profile, "_ndmi.tif")
     return {"type": "raster", "path": path, "metadata": {}}
 
 
@@ -160,22 +826,14 @@ def ndwi_node(inputs: dict, config: dict) -> dict:
     raster_in = inputs.get("raster_in")
     if not raster_in:
         raise ValueError("ndwi requires 'raster_in' input")
-
     green_band = int(config.get("green_band", 3))
     nir_band = int(config.get("nir_band", 5))
-
     with rasterio.open(raster_in["path"]) as src:
+        _check_bands(src, green_band, nir_band, node_name="ndwi")
         green = src.read(green_band, masked=True).astype(np.float32)
         nir = src.read(nir_band, masked=True).astype(np.float32)
         profile = src.profile.copy()
-
-    denom = green + nir
-    ndwi = np.where(denom == 0, _NODATA, (green - nir) / denom).astype(np.float32)
-
-    combined_mask = np.ma.getmaskarray(green) | np.ma.getmaskarray(nir)
-    ndwi[combined_mask] = _NODATA
-
-    path = _write_raster(ndwi, profile, "_ndwi.tif")
+    path = _write_raster(_norm_diff(green, nir), profile, "_ndwi.tif")
     return {"type": "raster", "path": path, "metadata": {}}
 
 
@@ -183,429 +841,240 @@ def mndwi_node(inputs: dict, config: dict) -> dict:
     raster_in = inputs.get("raster_in")
     if not raster_in:
         raise ValueError("mndwi requires 'raster_in' input")
-
     green_band = int(config.get("green_band", 3))
     swir_band = int(config.get("swir_band", 6))
-
     with rasterio.open(raster_in["path"]) as src:
+        _check_bands(src, green_band, swir_band, node_name="mndwi")
         green = src.read(green_band, masked=True).astype(np.float32)
         swir = src.read(swir_band, masked=True).astype(np.float32)
         profile = src.profile.copy()
-
-    denom = green + swir
-    mndwi = np.where(denom == 0, _NODATA, (green - swir) / denom).astype(np.float32)
-
-    combined_mask = np.ma.getmaskarray(green) | np.ma.getmaskarray(swir)
-    mndwi[combined_mask] = _NODATA
-
-    path = _write_raster(mndwi, profile, "_mndwi.tif")
-    return {"type": "raster", "path": path, "metadata": {}}
-
-
-def nbr_node(inputs: dict, config: dict) -> dict:
-    raster_in = inputs.get("raster_in")
-    if not raster_in:
-        raise ValueError("nbr requires 'raster_in' input")
-
-    nir_band = int(config.get("nir_band", 5))
-    swir2_band = int(config.get("swir2_band", 7))
-
-    with rasterio.open(raster_in["path"]) as src:
-        nir = src.read(nir_band, masked=True).astype(np.float32)
-        swir2 = src.read(swir2_band, masked=True).astype(np.float32)
-        profile = src.profile.copy()
-
-    denom = nir + swir2
-    nbr = np.where(denom == 0, _NODATA, (nir - swir2) / denom).astype(np.float32)
-
-    combined_mask = np.ma.getmaskarray(nir) | np.ma.getmaskarray(swir2)
-    nbr[combined_mask] = _NODATA
-
-    path = _write_raster(nbr, profile, "_nbr.tif")
-    return {"type": "raster", "path": path, "metadata": {}}
-
-
-def bsi_node(inputs: dict, config: dict) -> dict:
-    raster_in = inputs.get("raster_in")
-    if not raster_in:
-        raise ValueError("bsi requires 'raster_in' input")
-
-    swir = int(config.get("swir_band", 6))
-    red = int(config.get("red_band", 4))
-    nir = int(config.get("nir_band", 5))
-    blue = int(config.get("blue_band", 2))
-
-    with rasterio.open(raster_in["path"]) as src:
-        swir_b = src.read(swir, masked=True).astype(np.float32)
-        red_b = src.read(red, masked=True).astype(np.float32)
-        nir_b = src.read(nir, masked=True).astype(np.float32)
-        blue_b = src.read(blue, masked=True).astype(np.float32)
-        profile = src.profile.copy()
-
-    num = (swir_b + red_b) - (nir_b + blue_b)
-    denom = (swir_b + red_b) + (nir_b + blue_b)
-
-    bsi = np.where(denom == 0, _NODATA, num / denom).astype(np.float32)
-
-    combined_mask = (
-        np.ma.getmaskarray(swir_b)
-        | np.ma.getmaskarray(red_b)
-        | np.ma.getmaskarray(nir_b)
-        | np.ma.getmaskarray(blue_b)
-    )
-    bsi[combined_mask] = _NODATA
-
-    path = _write_raster(bsi, profile, "_bsi.tif")
-    return {"type": "raster", "path": path, "metadata": {}}
-
-
-def ndsi_node(inputs: dict, config: dict) -> dict:
-    raster_in = inputs.get("raster_in")
-    if not raster_in:
-        raise ValueError("ndsi requires 'raster_in' input")
-
-    green_band = int(config.get("green_band", 3))
-    swir_band = int(config.get("swir_band", 6))
-
-    with rasterio.open(raster_in["path"]) as src:
-        green = src.read(green_band, masked=True).astype(np.float32)
-        swir = src.read(swir_band, masked=True).astype(np.float32)
-        profile = src.profile.copy()
-
-    denom = green + swir
-    ndsi = np.where(denom == 0, _NODATA, (green - swir) / denom).astype(np.float32)
-
-    combined_mask = np.ma.getmaskarray(green) | np.ma.getmaskarray(swir)
-    ndsi[combined_mask] = _NODATA
-
-    path = _write_raster(ndsi, profile, "_ndsi.tif")
-    return {"type": "raster", "path": path, "metadata": {}}
-
-
-def _read_bands(src, bands):
-    return [src.read(b, masked=True).astype(np.float32) for b in bands]
-
-
-def gndvi_node(inputs: dict, config: dict) -> dict:
-    raster_in = inputs.get("raster_in")
-    nir_band = int(config.get("nir_band", 5))
-    green_band = int(config.get("green_band", 3))
-
-    with rasterio.open(raster_in["path"]) as src:
-        nir, green = _read_bands(src, [nir_band, green_band])
-        profile = src.profile.copy()
-
-    denom = nir + green
-    out = np.where(denom == 0, _NODATA, (nir - green) / denom)
-    out[np.ma.getmaskarray(nir) | np.ma.getmaskarray(green)] = _NODATA
-
-    path = _write_raster(out.astype(np.float32), profile, "_gndvi.tif")
-    return {"type": "raster", "path": path, "metadata": {}}
-
-
-def rdvi_node(inputs: dict, config: dict) -> dict:
-    raster_in = inputs.get("raster_in")
-    nir_band = int(config.get("nir_band", 5))
-    red_band = int(config.get("red_band", 4))
-
-    with rasterio.open(raster_in["path"]) as src:
-        nir, red = _read_bands(src, [nir_band, red_band])
-        profile = src.profile.copy()
-
-    denom = np.sqrt(nir + red)
-    out = np.where(denom == 0, _NODATA, (nir - red) / denom)
-    out[np.ma.getmaskarray(nir) | np.ma.getmaskarray(red)] = _NODATA
-
-    path = _write_raster(out.astype(np.float32), profile, "_rdvi.tif")
-    return {"type": "raster", "path": path, "metadata": {}}
-
-
-def tvi_node(inputs: dict, config: dict) -> dict:
-    raster_in = inputs.get("raster_in")
-
-    with rasterio.open(raster_in["path"]) as src:
-        nir, red = _read_bands(src, [5, 4])
-        profile = src.profile.copy()
-
-    ndvi = (nir - red) / (nir + red)
-    out = np.sqrt(ndvi + 0.5)
-
-    out[np.ma.getmaskarray(nir) | np.ma.getmaskarray(red)] = _NODATA
-    path = _write_raster(out.astype(np.float32), profile, "_tvi.tif")
-    return {"type": "raster", "path": path, "metadata": {}}
-
-
-def dvi_node(inputs: dict, config: dict) -> dict:
-    raster_in = inputs.get("raster_in")
-
-    with rasterio.open(raster_in["path"]) as src:
-        nir, red = _read_bands(src, [5, 4])
-        profile = src.profile.copy()
-
-    out = nir - red
-    out[np.ma.getmaskarray(nir) | np.ma.getmaskarray(red)] = _NODATA
-
-    path = _write_raster(out.astype(np.float32), profile, "_dvi.tif")
-    return {"type": "raster", "path": path, "metadata": {}}
-
-
-def rvi_node(inputs: dict, config: dict) -> dict:
-    raster_in = inputs.get("raster_in")
-
-    with rasterio.open(raster_in["path"]) as src:
-        nir, red = _read_bands(src, [5, 4])
-        profile = src.profile.copy()
-
-    out = np.where(red == 0, _NODATA, nir / red)
-    out[np.ma.getmaskarray(nir) | np.ma.getmaskarray(red)] = _NODATA
-
-    path = _write_raster(out.astype(np.float32), profile, "_rvi.tif")
-    return {"type": "raster", "path": path, "metadata": {}}
-
-
-def cigreen_node(inputs: dict, config: dict) -> dict:
-    raster_in = inputs.get("raster_in")
-
-    with rasterio.open(raster_in["path"]) as src:
-        nir, green = _read_bands(src, [5, 3])
-        profile = src.profile.copy()
-
-    out = np.where(green == 0, _NODATA, (nir / green) - 1)
-    out[np.ma.getmaskarray(nir) | np.ma.getmaskarray(green)] = _NODATA
-
-    path = _write_raster(out.astype(np.float32), profile, "_cigreen.tif")
-    return {"type": "raster", "path": path, "metadata": {}}
-
-
-def cired_node(inputs: dict, config: dict) -> dict:
-    raster_in = inputs.get("raster_in")
-
-    with rasterio.open(raster_in["path"]) as src:
-        nir, red = _read_bands(src, [5, 4])
-        profile = src.profile.copy()
-
-    out = np.where(red == 0, _NODATA, (nir / red) - 1)
-    out[np.ma.getmaskarray(nir) | np.ma.getmaskarray(red)] = _NODATA
-
-    path = _write_raster(out.astype(np.float32), profile, "_cired.tif")
-    return {"type": "raster", "path": path, "metadata": {}}
-
-
-def ndre_node(inputs: dict, config: dict) -> dict:
-    raster_in = inputs.get("raster_in")
-
-    with rasterio.open(raster_in["path"]) as src:
-        nir, swir = _read_bands(src, [5, 6])
-        profile = src.profile.copy()
-
-    denom = nir + swir
-    out = np.where(denom == 0, _NODATA, (nir - swir) / denom)
-
-    out[np.ma.getmaskarray(nir) | np.ma.getmaskarray(swir)] = _NODATA
-    path = _write_raster(out.astype(np.float32), profile, "_ndre.tif")
-    return {"type": "raster", "path": path, "metadata": {}}
-
-
-def osavi_node(inputs: dict, config: dict) -> dict:
-    raster_in = inputs.get("raster_in")
-
-    with rasterio.open(raster_in["path"]) as src:
-        nir, red = _read_bands(src, [5, 4])
-        profile = src.profile.copy()
-
-    denom = nir + red + 0.16
-    out = np.where(denom == 0, _NODATA, (nir - red) / denom)
-
-    out[np.ma.getmaskarray(nir) | np.ma.getmaskarray(red)] = _NODATA
-    path = _write_raster(out.astype(np.float32), profile, "_osavi.tif")
-    return {"type": "raster", "path": path, "metadata": {}}
-
-
-def tsavi_node(inputs: dict, config: dict) -> dict:
-    raster_in = inputs.get("raster_in")
-    a = float(config.get("a", 1))
-    b = float(config.get("b", 0))
-
-    with rasterio.open(raster_in["path"]) as src:
-        nir, red = _read_bands(src, [5, 4])
-        profile = src.profile.copy()
-
-    denom = red + a * nir - a * b
-    out = np.where(denom == 0, _NODATA, a * (nir - a * red - b) / denom)
-
-    out[np.ma.getmaskarray(nir) | np.ma.getmaskarray(red)] = _NODATA
-    path = _write_raster(out.astype(np.float32), profile, "_tsavi.tif")
-    return {"type": "raster", "path": path, "metadata": {}}
-
-
-def vari_node(inputs: dict, config: dict) -> dict:
-    raster_in = inputs.get("raster_in")
-
-    with rasterio.open(raster_in["path"]) as src:
-        green, red, blue = _read_bands(src, [3, 4, 2])
-        profile = src.profile.copy()
-
-    denom = green + red - blue
-    out = np.where(denom == 0, _NODATA, (green - red) / denom)
-
-    out[np.ma.getmaskarray(green) | np.ma.getmaskarray(red) | np.ma.getmaskarray(blue)] = _NODATA
-    path = _write_raster(out.astype(np.float32), profile, "_vari.tif")
-    return {"type": "raster", "path": path, "metadata": {}}
-
-
-def avi_node(inputs: dict, config: dict) -> dict:
-    raster_in = inputs.get("raster_in")
-
-    with rasterio.open(raster_in["path"]) as src:
-        nir, red = _read_bands(src, [5, 4])
-        profile = src.profile.copy()
-
-    out = np.cbrt(nir * (1 - red) * (nir - red))
-    out[np.ma.getmaskarray(nir) | np.ma.getmaskarray(red)] = _NODATA
-
-    path = _write_raster(out.astype(np.float32), profile, "_avi.tif")
-    return {"type": "raster", "path": path, "metadata": {}}
-
-
-def arvi_node(inputs: dict, config: dict) -> dict:
-    raster_in = inputs.get("raster_in")
-
-    with rasterio.open(raster_in["path"]) as src:
-        nir, red, blue = _read_bands(src, [5, 4, 2])
-        profile = src.profile.copy()
-
-    rb = 2 * red - blue
-    denom = nir + rb
-    out = np.where(denom == 0, _NODATA, (nir - rb) / denom)
-
-    out[np.ma.getmaskarray(nir) | np.ma.getmaskarray(red) | np.ma.getmaskarray(blue)] = _NODATA
-    path = _write_raster(out.astype(np.float32), profile, "_arvi.tif")
-    return {"type": "raster", "path": path, "metadata": {}}
-
-
-def ndti_node(inputs: dict, config: dict) -> dict:
-    raster_in = inputs.get("raster_in")
-    with rasterio.open(raster_in["path"]) as src:
-        red, green = _read_bands(src, [4, 3])
-        profile = src.profile.copy()
-
-    denom = red + green
-    out = np.where(denom == 0, _NODATA, (red - green) / denom)
-    out[np.ma.getmaskarray(red) | np.ma.getmaskarray(green)] = _NODATA
-
-    path = _write_raster(out.astype(np.float32), profile, "_ndti.tif")
+    path = _write_raster(_norm_diff(green, swir), profile, "_mndwi.tif")
     return {"type": "raster", "path": path, "metadata": {}}
 
 
 def wri_node(inputs: dict, config: dict) -> dict:
     raster_in = inputs.get("raster_in")
+    if not raster_in:
+        raise ValueError("wri requires 'raster_in' input")
+    green_band = int(config.get("green_band", 3))
+    blue_band = int(config.get("blue_band", 2))
+    nir_band = int(config.get("nir_band", 5))
+    red_band = int(config.get("red_band", 4))
     with rasterio.open(raster_in["path"]) as src:
-        g, b, nir, red = _read_bands(src, [3, 2, 5, 4])
+        _check_bands(src, green_band, blue_band, nir_band, red_band, node_name="wri")
+        g, b, nir, red = _read_bands(src, [green_band, blue_band, nir_band, red_band])
         profile = src.profile.copy()
-
-    denom = nir + red
-    out = np.where(denom == 0, _NODATA, (g + b) / denom)
-
-    out[np.ma.getmaskarray(g) | np.ma.getmaskarray(b) |
-        np.ma.getmaskarray(nir) | np.ma.getmaskarray(red)] = _NODATA
-
-    path = _write_raster(out.astype(np.float32), profile, "_wri.tif")
-    return {"type": "raster", "path": path, "metadata": {}}
-
-
-def ui_node(inputs: dict, config: dict) -> dict:
-    raster_in = inputs.get("raster_in")
-    with rasterio.open(raster_in["path"]) as src:
-        swir2, nir = _read_bands(src, [7, 5])
-        profile = src.profile.copy()
-
-    denom = swir2 + nir
-    out = np.where(denom == 0, _NODATA, (swir2 - nir) / denom)
-
-    out[np.ma.getmaskarray(swir2) | np.ma.getmaskarray(nir)] = _NODATA
-    path = _write_raster(out.astype(np.float32), profile, "_ui.tif")
-    return {"type": "raster", "path": path, "metadata": {}}
-
-
-def nbr2_node(inputs: dict, config: dict) -> dict:
-    raster_in = inputs.get("raster_in")
-    with rasterio.open(raster_in["path"]) as src:
-        swir1, swir2 = _read_bands(src, [6, 7])
-        profile = src.profile.copy()
-
-    denom = swir1 + swir2
-    out = np.where(denom == 0, _NODATA, (swir1 - swir2) / denom)
-
-    out[np.ma.getmaskarray(swir1) | np.ma.getmaskarray(swir2)] = _NODATA
-    path = _write_raster(out.astype(np.float32), profile, "_nbr2.tif")
-    return {"type": "raster", "path": path, "metadata": {}}
-
-
-def bai_node(inputs: dict, config: dict) -> dict:
-    raster_in = inputs.get("raster_in")
-    with rasterio.open(raster_in["path"]) as src:
-        red, nir = _read_bands(src, [4, 5])
-        profile = src.profile.copy()
-
-    out = 1 / ((0.1 - red) ** 2 + (0.06 - nir) ** 2)
-    out[np.ma.getmaskarray(red) | np.ma.getmaskarray(nir)] = _NODATA
-
-    path = _write_raster(out.astype(np.float32), profile, "_bai.tif")
-    return {"type": "raster", "path": path, "metadata": {}}
-
-
-def csi_node(inputs: dict, config: dict) -> dict:
-    raster_in = inputs.get("raster_in")
-    with rasterio.open(raster_in["path"]) as src:
-        swir1, swir2 = _read_bands(src, [6, 7])
-        profile = src.profile.copy()
-
-    out = np.where(swir2 == 0, _NODATA, swir1 / swir2)
-    out[np.ma.getmaskarray(swir1) | np.ma.getmaskarray(swir2)] = _NODATA
-
-    path = _write_raster(out.astype(np.float32), profile, "_csi.tif")
+    denom = np.ma.filled(nir + red, 0).astype(np.float32)
+    num = np.ma.filled(g + b, 0).astype(np.float32)
+    out = np.where(denom == 0, _NODATA, num / np.where(denom == 0, 1.0, denom)).astype(np.float32)
+    out[np.ma.getmaskarray(g) | np.ma.getmaskarray(b) | np.ma.getmaskarray(nir) | np.ma.getmaskarray(red)] = _NODATA
+    path = _write_raster(out, profile, "_wri.tif")
     return {"type": "raster", "path": path, "metadata": {}}
 
 
 def s3_node(inputs: dict, config: dict) -> dict:
     raster_in = inputs.get("raster_in")
+    if not raster_in:
+        raise ValueError("s3 requires 'raster_in' input")
+    green_band = int(config.get("green_band", 3))
+    nir_band = int(config.get("nir_band", 5))
+    swir_band = int(config.get("swir_band", 6))
     with rasterio.open(raster_in["path"]) as src:
-        g, nir, swir = _read_bands(src, [3, 5, 6])
+        _check_bands(src, green_band, nir_band, swir_band, node_name="s3")
+        g, nir, swir = _read_bands(src, [green_band, nir_band, swir_band])
         profile = src.profile.copy()
-
-    denom = (g + nir) * (nir + swir)
-    out = np.where(denom == 0, _NODATA, (g * (nir - swir)) / denom)
-
+    g_f = np.ma.filled(g, 0).astype(np.float32)
+    nir_f = np.ma.filled(nir, 0).astype(np.float32)
+    swir_f = np.ma.filled(swir, 0).astype(np.float32)
+    denom = (g_f + nir_f) * (nir_f + swir_f)
+    out = np.where(denom == 0, _NODATA, (g_f * (nir_f - swir_f)) / np.where(denom == 0, 1.0, denom)).astype(np.float32)
     out[np.ma.getmaskarray(g) | np.ma.getmaskarray(nir) | np.ma.getmaskarray(swir)] = _NODATA
-    path = _write_raster(out.astype(np.float32), profile, "_s3.tif")
+    path = _write_raster(out, profile, "_s3.tif")
     return {"type": "raster", "path": path, "metadata": {}}
 
 
+## SPECTRAL INDICES – Urban / Built-up
+
+def ui_node(inputs: dict, config: dict) -> dict:
+    raster_in = inputs.get("raster_in")
+    if not raster_in:
+        raise ValueError("ui requires 'raster_in' input")
+    swir2_band = int(config.get("swir2_band", 7))
+    nir_band = int(config.get("nir_band", 5))
+    with rasterio.open(raster_in["path"]) as src:
+        _check_bands(src, swir2_band, nir_band, node_name="ui")
+        swir2, nir = _read_bands(src, [swir2_band, nir_band])
+        profile = src.profile.copy()
+    path = _write_raster(_norm_diff(swir2, nir), profile, "_ui.tif")
+    return {"type": "raster", "path": path, "metadata": {}}
+
+
+## SPECTRAL INDICES – Burn / Fire
+
+def nbr_node(inputs: dict, config: dict) -> dict:
+    raster_in = inputs.get("raster_in")
+    if not raster_in:
+        raise ValueError("nbr requires 'raster_in' input")
+    nir_band = int(config.get("nir_band", 5))
+    swir2_band = int(config.get("swir2_band", 7))
+    with rasterio.open(raster_in["path"]) as src:
+        _check_bands(src, nir_band, swir2_band, node_name="nbr")
+        nir = src.read(nir_band, masked=True).astype(np.float32)
+        swir2 = src.read(swir2_band, masked=True).astype(np.float32)
+        profile = src.profile.copy()
+    path = _write_raster(_norm_diff(nir, swir2), profile, "_nbr.tif")
+    return {"type": "raster", "path": path, "metadata": {}}
+
+
+def nbr2_node(inputs: dict, config: dict) -> dict:
+    raster_in = inputs.get("raster_in")
+    if not raster_in:
+        raise ValueError("nbr2 requires 'raster_in' input")
+    swir1_band = int(config.get("swir1_band", 6))
+    swir2_band = int(config.get("swir2_band", 7))
+    with rasterio.open(raster_in["path"]) as src:
+        _check_bands(src, swir1_band, swir2_band, node_name="nbr2")
+        swir1, swir2 = _read_bands(src, [swir1_band, swir2_band])
+        profile = src.profile.copy()
+    path = _write_raster(_norm_diff(swir1, swir2), profile, "_nbr2.tif")
+    return {"type": "raster", "path": path, "metadata": {}}
+
+
+def bai_node(inputs: dict, config: dict) -> dict:
+    raster_in = inputs.get("raster_in")
+    if not raster_in:
+        raise ValueError("bai requires 'raster_in' input")
+    red_band = int(config.get("red_band", 4))
+    nir_band = int(config.get("nir_band", 5))
+    with rasterio.open(raster_in["path"]) as src:
+        _check_bands(src, red_band, nir_band, node_name="bai")
+        red, nir = _read_bands(src, [red_band, nir_band])
+        profile = src.profile.copy()
+    red_f = np.ma.filled(red, 0).astype(np.float32)
+    nir_f = np.ma.filled(nir, 0).astype(np.float32)
+    bai_denom = (0.1 - red_f) ** 2 + (0.06 - nir_f) ** 2
+    out = np.where(bai_denom == 0, _NODATA, 1.0 / np.where(bai_denom == 0, 1.0, bai_denom)).astype(np.float32)
+    out[np.ma.getmaskarray(red) | np.ma.getmaskarray(nir)] = _NODATA
+    path = _write_raster(out, profile, "_bai.tif")
+    return {"type": "raster", "path": path, "metadata": {}}
+
+
+def csi_node(inputs: dict, config: dict) -> dict:
+    raster_in = inputs.get("raster_in")
+    if not raster_in:
+        raise ValueError("csi requires 'raster_in' input")
+    swir1_band = int(config.get("swir1_band", 6))
+    swir2_band = int(config.get("swir2_band", 7))
+    with rasterio.open(raster_in["path"]) as src:
+        _check_bands(src, swir1_band, swir2_band, node_name="csi")
+        swir1, swir2 = _read_bands(src, [swir1_band, swir2_band])
+        profile = src.profile.copy()
+    swir2_f = np.ma.filled(swir2, 0).astype(np.float32)
+    swir1_f = np.ma.filled(swir1, _NODATA).astype(np.float32)
+    out = np.where(swir2_f == 0, _NODATA, swir1_f / np.where(swir2_f == 0, 1.0, swir2_f)).astype(np.float32)
+    out[np.ma.getmaskarray(swir1) | np.ma.getmaskarray(swir2)] = _NODATA
+    path = _write_raster(out, profile, "_csi.tif")
+    return {"type": "raster", "path": path, "metadata": {}}
+
+
+## SPECTRAL INDICES – Soil / Bare
+
+def bsi_node(inputs: dict, config: dict) -> dict:
+    raster_in = inputs.get("raster_in")
+    if not raster_in:
+        raise ValueError("bsi requires 'raster_in' input")
+    swir_band = int(config.get("swir_band", 6))
+    red_band = int(config.get("red_band", 4))
+    nir_band = int(config.get("nir_band", 5))
+    blue_band = int(config.get("blue_band", 2))
+    with rasterio.open(raster_in["path"]) as src:
+        _check_bands(src, swir_band, red_band, nir_band, blue_band, node_name="bsi")
+        swir_b = src.read(swir_band, masked=True).astype(np.float32)
+        red_b = src.read(red_band, masked=True).astype(np.float32)
+        nir_b = src.read(nir_band, masked=True).astype(np.float32)
+        blue_b = src.read(blue_band, masked=True).astype(np.float32)
+        profile = src.profile.copy()
+    num = np.ma.filled((swir_b + red_b) - (nir_b + blue_b), 0).astype(np.float32)
+    denom = np.ma.filled((swir_b + red_b) + (nir_b + blue_b), 0).astype(np.float32)
+    out = np.where(denom == 0, _NODATA, num / np.where(denom == 0, 1.0, denom)).astype(np.float32)
+    combined_mask = (
+        np.ma.getmaskarray(swir_b) | np.ma.getmaskarray(red_b)
+        | np.ma.getmaskarray(nir_b) | np.ma.getmaskarray(blue_b)
+    )
+    out[combined_mask] = _NODATA
+    path = _write_raster(out, profile, "_bsi.tif")
+    return {"type": "raster", "path": path, "metadata": {}}
+
+
+## SPECTRAL INDICES – Snow
+
+def ndsi_node(inputs: dict, config: dict) -> dict:
+    raster_in = inputs.get("raster_in")
+    if not raster_in:
+        raise ValueError("ndsi requires 'raster_in' input")
+    green_band = int(config.get("green_band", 3))
+    swir_band = int(config.get("swir_band", 6))
+    with rasterio.open(raster_in["path"]) as src:
+        _check_bands(src, green_band, swir_band, node_name="ndsi")
+        green = src.read(green_band, masked=True).astype(np.float32)
+        swir = src.read(swir_band, masked=True).astype(np.float32)
+        profile = src.profile.copy()
+    path = _write_raster(_norm_diff(green, swir), profile, "_ndsi.tif")
+    return {"type": "raster", "path": path, "metadata": {}}
+
+
+## SPECTRAL INDICES – Turbidity / Sediment
+
+def ndti_node(inputs: dict, config: dict) -> dict:
+    raster_in = inputs.get("raster_in")
+    if not raster_in:
+        raise ValueError("ndti requires 'raster_in' input")
+    red_band = int(config.get("red_band", 4))
+    green_band = int(config.get("green_band", 3))
+    with rasterio.open(raster_in["path"]) as src:
+        _check_bands(src, red_band, green_band, node_name="ndti")
+        red, green = _read_bands(src, [red_band, green_band])
+        profile = src.profile.copy()
+    path = _write_raster(_norm_diff(red, green), profile, "_ndti.tif")
+    return {"type": "raster", "path": path, "metadata": {}}
+
+
+## SPECTRAL INDICES – Atmospheric
+
 def hot_node(inputs: dict, config: dict) -> dict:
     raster_in = inputs.get("raster_in")
+    if not raster_in:
+        raise ValueError("hot requires 'raster_in' input")
+    blue_band = int(config.get("blue_band", 2))
+    red_band = int(config.get("red_band", 4))
     with rasterio.open(raster_in["path"]) as src:
-        blue, red = _read_bands(src, [2, 4])
+        _check_bands(src, blue_band, red_band, node_name="hot")
+        blue, red = _read_bands(src, [blue_band, red_band])
         profile = src.profile.copy()
-
-    out = blue - 0.5 * red - 0.08
+    out = np.ma.filled(blue - 0.5 * red - 0.08, _NODATA).astype(np.float32)
     out[np.ma.getmaskarray(blue) | np.ma.getmaskarray(red)] = _NODATA
-
-    path = _write_raster(out.astype(np.float32), profile, "_hot.tif")
+    path = _write_raster(out, profile, "_hot.tif")
     return {"type": "raster", "path": path, "metadata": {}}
 
 
 def shadow_index_node(inputs: dict, config: dict) -> dict:
     raster_in = inputs.get("raster_in")
+    if not raster_in:
+        raise ValueError("shadow_index requires 'raster_in' input")
+    blue_band = int(config.get("blue_band", 2))
+    green_band = int(config.get("green_band", 3))
+    red_band = int(config.get("red_band", 4))
     with rasterio.open(raster_in["path"]) as src:
-        b, g, r = _read_bands(src, [2, 3, 4])
+        _check_bands(src, blue_band, green_band, red_band, node_name="shadow_index")
+        b, g, r = _read_bands(src, [blue_band, green_band, red_band])
         profile = src.profile.copy()
-
-    out = (1 - b) * (1 - g) * (1 - r)
+    out = np.ma.filled((1 - b) * (1 - g) * (1 - r), _NODATA).astype(np.float32)
     out[np.ma.getmaskarray(b) | np.ma.getmaskarray(g) | np.ma.getmaskarray(r)] = _NODATA
-
-    path = _write_raster(out.astype(np.float32), profile, "_shadow.tif")
+    path = _write_raster(out, profile, "_shadow.tif")
     return {"type": "raster", "path": path, "metadata": {}}
 
+
+## UTILITIES
 
 def reclassify_node(inputs: dict, config: dict) -> dict:
     raster_in = inputs.get("raster_in")
@@ -627,13 +1096,15 @@ def reclassify_node(inputs: dict, config: dict) -> dict:
         mask |= result == float(nodata_src)
 
     reclassed = np.full_like(result, _NODATA)
-    for rule in rules:
+    for i, rule in enumerate(rules):
         try:
             lo = float(rule["min"])
             hi = float(rule["max"])
             new_val = float(rule["new_value"])
-        except (KeyError, TypeError, ValueError):
-            continue
+        except KeyError as e:
+            raise ValueError(f"reclassify rule[{i}] missing key {e}") from e
+        except (TypeError, ValueError) as e:
+            raise ValueError(f"reclassify rule[{i}] has invalid value: {e}") from e
         in_range = (result >= lo) & (result <= hi) & ~mask
         reclassed[in_range] = new_val
 
@@ -671,7 +1142,8 @@ def clip_node(inputs: dict, config: dict) -> dict:
         compress="deflate",
         nodata=_NODATA,
     )
-    tmp_path = tempfile.mktemp(suffix="_clip.tif", prefix="wf_")
+    fd, tmp_path = tempfile.mkstemp(suffix="_clip.tif", prefix="wf_")
+    os.close(fd)
     with rasterio.open(tmp_path, "w", **out_meta) as dst:
         dst.write(out_image.astype(np.float32))
 
@@ -710,19 +1182,10 @@ def zonal_stats_node(inputs: dict, config: dict) -> dict:
         nodata=_NODATA,
     )
 
-    result_geojson = {
-        "type": "FeatureCollection",
-        "features": stats_results,
-    }
+    result_geojson = {"type": "FeatureCollection", "features": stats_results}
 
-    tmp = tempfile.NamedTemporaryFile(
-        suffix="_zstats.geojson", delete=False, mode="w", prefix="wf_"
-    )
+    tmp = tempfile.NamedTemporaryFile(suffix="_zstats.geojson", delete=False, mode="w", prefix="wf_")
     json.dump(result_geojson, tmp)
     tmp.close()
 
-    return {
-        "type": "vector",
-        "path": tmp.name,
-        "metadata": {"geojson": result_geojson},
-    }
+    return {"type": "vector", "path": tmp.name, "metadata": {"geojson": result_geojson}}

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useStore } from "../../store";
 import { fetchNodeCatalog } from "../../api/workflows";
 import type { NodePaletteItem } from "../../types/workflow.types";
@@ -64,15 +64,25 @@ function PaletteItem({ item }: { item: NodePaletteItem }) {
 export default function NodePalette() {
   const nodeCatalog = useStore((s) => s.nodeCatalog);
   const setCatalog = useStore((s) => s.setCatalog);
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     if (nodeCatalog.length > 0) return;
     fetchNodeCatalog().then(setCatalog).catch(console.error);
   }, []);
 
+  const query = search.trim().toLowerCase();
+  const filtered = query
+    ? nodeCatalog.filter(
+        (n) =>
+          n.label.toLowerCase().includes(query) ||
+          (n.description ?? "").toLowerCase().includes(query)
+      )
+    : nodeCatalog;
+
   const grouped = CATEGORY_ORDER.map((cat) => ({
     cat,
-    items: nodeCatalog.filter((n) => n.category === cat),
+    items: filtered.filter((n) => n.category === cat),
   }));
 
   return (
@@ -84,7 +94,7 @@ export default function NodePalette() {
         display: "flex",
         flexDirection: "column",
         padding: "12px 8px",
-        gap: 16,
+        gap: 12,
         overflowY: "auto",
         flexShrink: 0,
       }}
@@ -93,8 +103,55 @@ export default function NodePalette() {
         NODE PALETTE
       </div>
 
+      <div style={{ position: "relative" }}>
+        <input
+          type="text"
+          placeholder="Search nodes…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          style={{
+            width: "100%",
+            boxSizing: "border-box",
+            background: "#111c2b",
+            border: "1px solid #253244",
+            borderRadius: 5,
+            padding: "5px 26px 5px 8px",
+            fontSize: 11,
+            color: "#e2e8f0",
+            outline: "none",
+          }}
+          onFocus={(e) => (e.currentTarget.style.borderColor = "#3b82f6")}
+          onBlur={(e) => (e.currentTarget.style.borderColor = "#253244")}
+        />
+        {search && (
+          <button
+            onClick={() => setSearch("")}
+            style={{
+              position: "absolute",
+              right: 5,
+              top: "50%",
+              transform: "translateY(-50%)",
+              background: "none",
+              border: "none",
+              color: "#475569",
+              cursor: "pointer",
+              padding: 0,
+              fontSize: 13,
+              lineHeight: 1,
+            }}
+            title="Clear"
+          >
+            ×
+          </button>
+        )}
+      </div>
+
       {nodeCatalog.length === 0 && (
         <div style={{ fontSize: 11, color: "#475569", paddingLeft: 2 }}>Loading nodes…</div>
+      )}
+
+      {query && filtered.length === 0 && (
+        <div style={{ fontSize: 11, color: "#475569", paddingLeft: 2 }}>No nodes match.</div>
       )}
 
       {grouped.map(({ cat, items }) =>
