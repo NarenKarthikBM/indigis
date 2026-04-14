@@ -186,53 +186,31 @@ def extract_nc_variable_to_tiffs(nc_path: str, variable: str, out_dir: str) -> l
     import xarray as xr
     import rioxarray  # noqa: F401 — registers .rio accessor
 
-    try:
-        from python_cdo_wrapper import CDO
-
-        cdo = CDO()
-        ds = cdo.query(nc_path).select_var(variable).compute()
-    except Exception:
-        # Fall back to opening directly when CDO is unavailable
-        ds = xr.open_dataset(nc_path)
-
+    ds = xr.open_dataset(nc_path)
     os.makedirs(out_dir, exist_ok=True)
 
     da = ds[variable]
+
+    da.rio.set_spatial_dims(x_dim='lon', y_dim='lat', inplace=True)
+
     # Set CRS to EPSG:4326 if not already set
     try:
         da = da.rio.write_crs("EPSG:4326")
     except Exception:
         pass
 
-    def _to_2d(slice_da):
-        """Reduce a DataArray to exactly 2 spatial dims for single-band TIFF output.
-
-        ERA5 files that span the ERA5/ERA5T boundary carry an 'expver' dimension
-        (and similar non-spatial extra dims), so da.sel(time=t) can still be 3-D.
-        Squeeze out size-1 dims first; then drop the first remaining non-spatial
-        dim one step at a time until only (y, x) remain.
-        """
-        slice_da = slice_da.squeeze(drop=True)
-        try:
-            spatial_dims = {slice_da.rio.x_dim, slice_da.rio.y_dim}
-        except Exception:
-            # Fallback: treat last two dims as spatial
-            spatial_dims = set(slice_da.dims[-2:])
-        while len(slice_da.dims) > 2:
-            extra = next(d for d in slice_da.dims if d not in spatial_dims)
-            slice_da = slice_da.isel({extra: 0})
-        return slice_da
-
     results = []
     if "time" in da.dims:
+        if "level" in da.dims:
+            da = da.isel(level=0)  # select first level if present, to simplify
         for t in da.time:
             label = str(t.dt.strftime("%Y%m%d").values)
             tif_path = os.path.join(out_dir, f"{variable}_{label}.tif")
-            _to_2d(da.sel(time=t)).rio.to_raster(tif_path)
+            da.sel(time=t).rio.to_raster(tif_path)
             results.append({"path": tif_path, "period_label": label, "time": t.values})
     else:
         tif_path = os.path.join(out_dir, f"{variable}.tif")
-        _to_2d(da).rio.to_raster(tif_path)
+        da.rio.to_raster(tif_path)
         results.append({"path": tif_path, "period_label": "", "time": None})
 
     ds.close()
