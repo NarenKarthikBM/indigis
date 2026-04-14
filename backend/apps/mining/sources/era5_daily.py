@@ -148,7 +148,7 @@ class ERA5DailySource:
 
             job = MiningJob.objects.create(
                 source=ds,
-                layer=ds.layer,
+                layer=None,  # ERA5 jobs produce multiple layers — linked per-asset via _register_asset
                 status=MiningJob.STATUS_RUNNING,
                 period_start=period_start,
                 period_end=period_end,

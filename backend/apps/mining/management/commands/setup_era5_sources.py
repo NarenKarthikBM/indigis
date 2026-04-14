@@ -110,12 +110,22 @@ DATASOURCE_SPECS = [
         "label": "ERA5 2m Temperature (Daily Statistics, CDS)",
         "variable": "2m_temperature",
         "fetch_schedule": "0 2 1 * *",  # monthly, 1st at 02:00
+        "layer_slugs": [
+            "era5-t2m-daily-mean", "era5-t2m-daily-min", "era5-t2m-daily-max",
+            "era5-t2m-monthly-mean", "era5-t2m-monthly-max",
+            "era5-t2m-yearly-mean", "era5-t2m-yearly-min", "era5-t2m-yearly-max",
+        ],
     },
     {
         "slug": "era5-total-precipitation",
         "label": "ERA5 Total Precipitation (Daily Statistics, CDS)",
         "variable": "total_precipitation",
         "fetch_schedule": "0 3 1 * *",  # monthly, 1st at 03:00
+        "layer_slugs": [
+            "era5-precip-daily-sum",
+            "era5-precip-monthly-sum",
+            "era5-precip-yearly-sum",
+        ],
     },
 ]
 
@@ -187,7 +197,7 @@ class Command(BaseCommand):
             else:
                 self.stdout.write(f"  exists   {spec['slug']}  (use --update to overwrite)")
 
-        # Create DataSource records
+        # Create DataSource records and link layers via M2M
         self.stdout.write("\nDataSources:")
         for spec in DATASOURCE_SPECS:
             config = {"variable": spec["variable"], "bbox": bbox, "start_year": start_year}
@@ -208,6 +218,11 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.WARNING(f"  updated  {spec['slug']}"))
             else:
                 self.stdout.write(f"  exists   {spec['slug']}  (use --update to overwrite)")
+
+            # Always sync M2M layers (idempotent)
+            linked_layers = Layer.objects.filter(slug__in=spec["layer_slugs"])
+            ds.layers.set(linked_layers)
+            self.stdout.write(f"         → linked {linked_layers.count()} layer(s)")
 
         self.stdout.write(self.style.SUCCESS("\nDone."))
         self.stdout.write(

@@ -51,7 +51,7 @@ class DataSourceDetailSerializer(serializers.ModelSerializer):
             "slug",
             "label",
             "source_type",
-            "layer",
+            "layers",
             "fetch_schedule",
             "last_fetched_at",
             "next_fetch_at",

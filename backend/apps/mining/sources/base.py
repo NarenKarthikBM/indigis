@@ -54,9 +54,11 @@ class BaseMiningSource(ABC):
             return
 
         for period_start, period_end in periods:
+            primary_layer = ds.layers.first()
+
             job = MiningJob.objects.create(
                 source=ds,
-                layer=ds.layer,
+                layer=primary_layer,
                 status=MiningJob.STATUS_RUNNING,
                 period_start=period_start,
                 period_end=period_end,
@@ -76,10 +78,10 @@ class BaseMiningSource(ABC):
                 job.bytes_written = os.path.getsize(cog_path) if os.path.exists(cog_path) else 0
                 job.save()
 
-                if ds.layer:
+                if primary_layer:
                     from apps.layers.services import create_raster_asset_and_queue_stats
                     create_raster_asset_and_queue_stats(
-                        layer=ds.layer,
+                        layer=primary_layer,
                         cog_url=cog_url,
                         period_label=f"{period_start}_{period_end}",
                         data_period_start=period_start,

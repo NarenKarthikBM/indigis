@@ -28,10 +28,8 @@ class DataSource(models.Model):
     slug = models.SlugField(unique=True)
     label = models.CharField(max_length=100)
     source_type = models.CharField(max_length=20, choices=SOURCE_TYPE_CHOICES)
-    layer = models.ForeignKey(
+    layers = models.ManyToManyField(
         "layers.Layer",
-        on_delete=models.SET_NULL,
-        null=True,
         blank=True,
         related_name="data_sources",
     )

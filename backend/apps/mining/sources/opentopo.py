@@ -134,7 +134,8 @@ class OpenTopoSource(BaseMiningSource):
             "API_Key": api_key,
         }
 
-        layer_slug = ds.layer.slug if ds.layer else demtype_to_slug(demtype)
+        primary_layer = ds.layers.first()
+        layer_slug = primary_layer.slug if primary_layer else demtype_to_slug(demtype)
         dir_path = f"/cogs/mining/{layer_slug}"
         os.makedirs(dir_path, exist_ok=True)
 
