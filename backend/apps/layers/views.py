@@ -1,18 +1,19 @@
 import os
+import shutil
 import uuid
 from datetime import date
 
 from django.conf import settings
 from django.db import connection
 from django.utils.text import slugify
-from rest_framework.parsers import MultiPartParser
+from rest_framework.parsers import JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 
-from .models import Layer, LayerCategory, RasterAsset, VectorLayer
-from .serializers import LayerCategorySerializer, LayerSerializer
+from .models import Layer, LayerCategory, RasterAsset, UploadTask, VectorLayer
+from .serializers import LayerCategorySerializer, LayerSerializer, UploadTaskSerializer
 from . import services
 
 
@@ -238,7 +239,8 @@ class RasterUploadView(APIView):
                 data_source="user_upload",
                 **metadata,
             )
-            RasterAsset.objects.create(
+            from . import services as layer_services
+            layer_services.create_raster_asset_and_queue_stats(
                 layer=layer,
                 cog_url=f"/data/cogs/{layer_slug}.tif",
             )
@@ -251,6 +253,122 @@ class RasterUploadView(APIView):
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response(LayerSerializer(layer).data, status=status.HTTP_201_CREATED)
+
+
+class RasterUploadAsyncView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser]
+
+    def post(self, request):
+        from .tasks import process_raster_upload
+
+        file = request.FILES.get("file")
+        if not file:
+            return Response({"detail": "file is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        tmp_dir = getattr(settings, "UPLOAD_TMP_PATH", "/tmp")
+        stable_path = os.path.join(tmp_dir, f"upload_{uuid.uuid4().hex}.tif")
+
+        # Use shutil.move for large files that Django already spooled to disk
+        if hasattr(file, "temporary_file_path"):
+            shutil.move(file.temporary_file_path(), stable_path)
+        else:
+            with open(stable_path, "wb") as f:
+                for chunk in file.chunks():
+                    f.write(chunk)
+
+        metadata_json = {
+            "label": request.data.get("label", os.path.basename(file.name)).strip(),
+            "overlay_type": request.data.get("overlay_type", "community"),
+            "category_slug": request.data.get("category_slug", ""),
+            "category_name": request.data.get("category_name", ""),
+            "colormap_name": request.data.get("colormap_name", "viridis"),
+            "description": request.data.get("description", ""),
+            "date_start": request.data.get("date_start", ""),
+            "date_end": request.data.get("date_end", ""),
+        }
+
+        task = UploadTask.objects.create(
+            file_path=stable_path,
+            file_type=UploadTask.FILE_TYPE_TIFF,
+            metadata_json=metadata_json,
+            created_by=request.user if request.user.is_authenticated else None,
+        )
+
+        process_raster_upload.delay(str(task.id))
+        return Response({"task_id": str(task.id)}, status=status.HTTP_202_ACCEPTED)
+
+
+class NetCDFInspectView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser]
+
+    def post(self, request):
+        file = request.FILES.get("file")
+        if not file:
+            return Response({"detail": "file is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        tmp_dir = getattr(settings, "UPLOAD_TMP_PATH", "/tmp")
+        tmp_nc_path = os.path.join(tmp_dir, f"nc_{uuid.uuid4().hex}.nc")
+
+        if hasattr(file, "temporary_file_path"):
+            shutil.move(file.temporary_file_path(), tmp_nc_path)
+        else:
+            with open(tmp_nc_path, "wb") as f:
+                for chunk in file.chunks():
+                    f.write(chunk)
+
+        try:
+            variables = services.inspect_netcdf(tmp_nc_path)
+        except Exception as exc:
+            if os.path.exists(tmp_nc_path):
+                os.unlink(tmp_nc_path)
+            return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response({"tmp_nc_path": tmp_nc_path, "variables": variables})
+
+
+class NetCDFUploadView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [JSONParser]
+
+    def post(self, request):
+        from .tasks import process_netcdf_variable
+
+        tmp_nc_path = request.data.get("tmp_nc_path", "")
+        variables = request.data.get("variables", [])
+        metadata = request.data.get("metadata", {})
+
+        tmp_dir = getattr(settings, "UPLOAD_TMP_PATH", "/tmp")
+        if not tmp_nc_path.startswith(tmp_dir):
+            return Response({"detail": "Invalid tmp_nc_path."}, status=status.HTTP_400_BAD_REQUEST)
+        if not os.path.exists(tmp_nc_path):
+            return Response({"detail": "File not found. Re-upload the .nc file."}, status=status.HTTP_400_BAD_REQUEST)
+        if not variables:
+            return Response({"detail": "At least one variable is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        tasks_created = []
+        for variable in variables:
+            task = UploadTask.objects.create(
+                file_path=tmp_nc_path,
+                file_type=UploadTask.FILE_TYPE_NC,
+                nc_variable=variable,
+                metadata_json=metadata,
+                created_by=request.user if request.user.is_authenticated else None,
+            )
+            process_netcdf_variable.delay(str(task.id))
+            tasks_created.append({"variable": variable, "task_id": str(task.id)})
+
+        return Response({"tasks": tasks_created}, status=status.HTTP_202_ACCEPTED)
+
+
+class UploadTaskStatusView(APIView):
+    def get(self, request, task_id):
+        try:
+            task = UploadTask.objects.select_related("layer").get(pk=task_id)
+        except UploadTask.DoesNotExist:
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(UploadTaskSerializer(task).data)
 
 
 class VectorTileView(APIView):

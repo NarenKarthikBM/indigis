@@ -20,3 +20,6 @@ requests>=2.31
 pystac-client>=0.7
 earthaccess>=0.11
 AHPy==2.1
+python-cdo-wrapper>=0.1
+xarray>=2024.1
+rioxarray>=0.17

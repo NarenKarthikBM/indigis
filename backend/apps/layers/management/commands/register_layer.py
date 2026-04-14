@@ -21,6 +21,8 @@ class Command(BaseCommand):
         parser.add_argument("--resolution", default="")
         parser.add_argument("--temporal-coverage", default="")
         parser.add_argument("--period-label", default="")
+        parser.add_argument("--no-stats", action="store_true", dest="no_stats",
+                            help="Skip zonal stats computation after registration")
 
     def handle(self, *args, **options):
         category = None
@@ -47,11 +49,19 @@ class Command(BaseCommand):
             },
         )
 
-        asset = RasterAsset.objects.create(
-            layer=layer,
-            cog_url=options["cog_url"],
-            period_label=options["period_label"],
-        )
+        if options["no_stats"]:
+            asset = RasterAsset.objects.create(
+                layer=layer,
+                cog_url=options["cog_url"],
+                period_label=options["period_label"],
+            )
+        else:
+            from apps.layers.services import create_raster_asset_and_queue_stats
+            asset = create_raster_asset_and_queue_stats(
+                layer=layer,
+                cog_url=options["cog_url"],
+                period_label=options["period_label"],
+            )
 
         action = "Created" if created else "Updated"
         self.stdout.write(

@@ -1,19 +1,14 @@
 import { useRef, useState } from "react";
-import { inspectLayer } from "../../api/upload";
+import { inspectLayer, inspectNetCDF } from "../../api/upload";
 import type { RasterMetadata } from "../../api/upload";
+import type { NCInspectResult } from "../../types/layer.types";
 
 interface Props {
   onComplete: (file: File, metadata: RasterMetadata) => void;
+  onNcComplete?: (file: File, result: NCInspectResult) => void;
 }
 
-function slugify(s: string) {
-  return s
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
-}
-
-export default function UploadStep1({ onComplete }: Props) {
+export default function UploadStep1({ onComplete, onNcComplete }: Props) {
   const [dragging, setDragging] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -21,8 +16,22 @@ export default function UploadStep1({ onComplete }: Props) {
 
   async function processFile(f: File) {
     const ext = f.name.split(".").pop()?.toLowerCase();
+    if (ext === "nc") {
+      setError(null);
+      setLoading(true);
+      try {
+        const result = await inspectNetCDF(f);
+        onNcComplete?.(f, result);
+      } catch (err: unknown) {
+        const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+        setError(msg ?? "Could not inspect NetCDF file.");
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
     if (ext !== "tif" && ext !== "tiff") {
-      setError("Please select a .tif or .tiff file.");
+      setError("Please select a .tif, .tiff, or .nc file.");
       return;
     }
     setError(null);
@@ -73,7 +82,7 @@ export default function UploadStep1({ onComplete }: Props) {
         <input
           ref={inputRef}
           type="file"
-          accept=".tif,.tiff"
+          accept=".tif,.tiff,.nc"
           style={{ display: "none" }}
           onChange={handleInputChange}
         />
@@ -96,7 +105,7 @@ export default function UploadStep1({ onComplete }: Props) {
             </p>
             <p style={s.orText}>or</p>
             <span style={s.browseBtn}>Browse files</span>
-            <p style={s.hint}>Accepts .tif and .tiff raster files</p>
+            <p style={s.hint}>Accepts .tif, .tiff raster files and .nc NetCDF files</p>
           </>
         )}
       </div>

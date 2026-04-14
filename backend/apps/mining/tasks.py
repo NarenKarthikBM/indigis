@@ -19,7 +19,8 @@ _STAC_REGISTRY: dict[str, str] = {
 
 # Registry of slug → dotted class path for NASA Earthaccess sources.
 _EARTHACCESS_REGISTRY: dict[str, str] = {
-    "modis-lst-daily": "apps.mining.sources.modis_lst.MODISLSTSource",
+    "modis-lst-monthly": "apps.mining.sources.modis_lst.MODISLSTSource",
+    "aster-dem":         "apps.mining.sources.aster_dem.AsterDEMSource",
 }
 
 

@@ -72,7 +72,7 @@ services:
 
   celery:
     build: ./backend
-    command: celery -A config worker -l info -Q mining,processing,exports,stats
+    command: celery -A config worker -l info -Q mining,processing,exports,stats,uploads
     volumes:
       - ./backend:/app
       - cog-data:/cogs

@@ -1,4 +1,5 @@
 import math
+import os
 import re
 from datetime import date, datetime
 
@@ -154,3 +155,83 @@ def extract_raster_metadata(path: str) -> dict:
 def convert_to_cog(src_path: str, dst_path: str) -> None:
     profile = cog_profiles.get("deflate")
     cog_translate(src_path, dst_path, profile, in_memory=False, quiet=True)
+
+
+def inspect_netcdf(path: str) -> list[dict]:
+    """Return a list of non-coordinate variables from a NetCDF file."""
+    import xarray as xr
+
+    ds = xr.open_dataset(path)
+    results = []
+    for name, da in ds.data_vars.items():
+        results.append(
+            {
+                "name": str(name),
+                "long_name": da.attrs.get("long_name", ""),
+                "units": da.attrs.get("units", ""),
+                "dimensions": list(da.dims),
+                "shape": list(da.shape),
+            }
+        )
+    ds.close()
+    return results
+
+
+def extract_nc_variable_to_tiffs(nc_path: str, variable: str, out_dir: str) -> list[dict]:
+    """
+    Extract a single variable from a NetCDF file and write one TIFF per time step.
+
+    Returns a list of dicts: [{path, period_label, time}, ...]
+    """
+    import xarray as xr
+    import rioxarray  # noqa: F401 — registers .rio accessor
+
+    try:
+        from python_cdo_wrapper import CDO
+        cdo = CDO()
+        tmp_nc = cdo.selvar(variable)(nc_path)
+        ds = xr.open_dataset(tmp_nc)
+    except Exception:
+        # Fall back to opening directly when CDO is unavailable
+        ds = xr.open_dataset(nc_path)
+
+    os.makedirs(out_dir, exist_ok=True)
+
+    da = ds[variable]
+    # Set CRS to EPSG:4326 if not already set
+    try:
+        da = da.rio.write_crs("EPSG:4326")
+    except Exception:
+        pass
+
+    results = []
+    if "time" in da.dims:
+        for t in da.time:
+            label = str(t.dt.strftime("%Y%m%d").values)
+            tif_path = os.path.join(out_dir, f"{variable}_{label}.tif")
+            da.sel(time=t).rio.to_raster(tif_path)
+            results.append({"path": tif_path, "period_label": label, "time": t.values})
+    else:
+        tif_path = os.path.join(out_dir, f"{variable}.tif")
+        da.rio.to_raster(tif_path)
+        results.append({"path": tif_path, "period_label": "", "time": None})
+
+    ds.close()
+    return results
+
+
+def create_raster_asset_and_queue_stats(**kwargs):
+    """Create a RasterAsset and enqueue zonal stats computation."""
+    from .models import RasterAsset
+    from apps.stats.tasks import compute_raster_zonal_stats
+
+    asset = RasterAsset.objects.create(**kwargs)
+    compute_raster_zonal_stats.delay(asset.pk)
+    return asset
+
+
+def _update_task_stage(task_id, stage: str, progress: int) -> None:
+    """Update task stage and progress atomically without loading the full object."""
+    from .models import UploadTask
+
+    UploadTask.objects.filter(pk=task_id).update(stage=stage, progress=progress)

@@ -276,7 +276,8 @@ class SaveAsLayerView(APIView):
             native_crs=metadata.get("native_crs", ""),
             spatial_resolution_m=metadata.get("spatial_resolution_m"),
         )
-        RasterAsset.objects.create(
+        from apps.layers.services import create_raster_asset_and_queue_stats
+        create_raster_asset_and_queue_stats(
             layer=layer,
             cog_url=cog_url,
         )

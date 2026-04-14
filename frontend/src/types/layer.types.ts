@@ -77,3 +77,36 @@ export interface TileURLResponse {
   max_value: number | null;
   label: string;
 }
+
+export type UploadTaskStatus = "pending" | "processing" | "done" | "failed";
+export type UploadTaskStage =
+  | "queued"
+  | "extracting_metadata"
+  | "converting_cog"
+  | "registering"
+  | "done";
+
+export interface UploadTask {
+  id: string;
+  status: UploadTaskStatus;
+  stage: UploadTaskStage;
+  progress: number;
+  error_message: string;
+  layer_id: number | null;
+  layer: Layer | null;
+  nc_variable: string;
+  created_at: string;
+}
+
+export interface NCVariable {
+  name: string;
+  long_name: string;
+  units: string;
+  dimensions: string[];
+  shape: number[];
+}
+
+export interface NCInspectResult {
+  tmp_nc_path: string;
+  variables: NCVariable[];
+}

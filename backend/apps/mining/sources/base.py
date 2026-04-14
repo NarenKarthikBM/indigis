@@ -77,7 +77,8 @@ class BaseMiningSource(ABC):
                 job.save()
 
                 if ds.layer:
-                    RasterAsset.objects.create(
+                    from apps.layers.services import create_raster_asset_and_queue_stats
+                    create_raster_asset_and_queue_stats(
                         layer=ds.layer,
                         cog_url=cog_url,
                         period_label=f"{period_start}_{period_end}",

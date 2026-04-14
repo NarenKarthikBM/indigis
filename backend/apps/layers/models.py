@@ -1,3 +1,6 @@
+import uuid
+
+from django.conf import settings
 from django.contrib.gis.db import models as gis_models
 from django.db import models
 from django.db.models import Index
@@ -122,3 +125,55 @@ class VectorFeature(models.Model):
         indexes = [
             Index(fields=["layer"]),
         ]
+
+
+class UploadTask(models.Model):
+    STATUS_PENDING = "pending"
+    STATUS_PROCESSING = "processing"
+    STATUS_DONE = "done"
+    STATUS_FAILED = "failed"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pending"),
+        (STATUS_PROCESSING, "Processing"),
+        (STATUS_DONE, "Done"),
+        (STATUS_FAILED, "Failed"),
+    ]
+
+    STAGE_QUEUED = "queued"
+    STAGE_EXTRACTING = "extracting_metadata"
+    STAGE_CONVERTING = "converting_cog"
+    STAGE_REGISTERING = "registering"
+    STAGE_DONE = "done"
+    STAGE_CHOICES = [
+        (STAGE_QUEUED, "Queued"),
+        (STAGE_EXTRACTING, "Extracting Metadata"),
+        (STAGE_CONVERTING, "Converting COG"),
+        (STAGE_REGISTERING, "Registering"),
+        (STAGE_DONE, "Done"),
+    ]
+
+    FILE_TYPE_TIFF = "tiff"
+    FILE_TYPE_NC = "nc"
+    FILE_TYPE_CHOICES = [(FILE_TYPE_TIFF, "TIFF"), (FILE_TYPE_NC, "NetCDF")]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    stage = models.CharField(max_length=30, choices=STAGE_CHOICES, default=STAGE_QUEUED)
+    progress = models.IntegerField(default=0)
+    file_path = models.CharField(max_length=500)
+    file_type = models.CharField(max_length=10, choices=FILE_TYPE_CHOICES, default=FILE_TYPE_TIFF)
+    nc_variable = models.CharField(max_length=200, blank=True)
+    metadata_json = models.JSONField(default=dict, blank=True)
+    error_message = models.TextField(blank=True)
+    layer = models.ForeignKey(Layer, on_delete=models.SET_NULL, null=True, blank=True, related_name="upload_tasks")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="upload_tasks"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"UploadTask {self.id} [{self.status}]"

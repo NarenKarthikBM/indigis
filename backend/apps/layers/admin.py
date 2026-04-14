@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Layer, LayerCategory, RasterAsset, VectorLayer, VectorFeature
+from .models import Layer, LayerCategory, RasterAsset, UploadTask, VectorLayer, VectorFeature
 
 
 class RasterAssetInline(admin.TabularInline):
@@ -25,3 +25,11 @@ class LayerAdmin(admin.ModelAdmin):
 @admin.register(VectorLayer)
 class VectorLayerAdmin(admin.ModelAdmin):
     list_display = ["layer", "geometry_type", "min_zoom", "max_zoom"]
+
+
+@admin.register(UploadTask)
+class UploadTaskAdmin(admin.ModelAdmin):
+    list_display = ["id", "status", "stage", "progress", "file_type", "nc_variable", "created_by", "created_at"]
+    list_filter = ["status", "file_type"]
+    readonly_fields = ["id", "created_at", "updated_at"]
+    search_fields = ["id", "nc_variable", "error_message"]

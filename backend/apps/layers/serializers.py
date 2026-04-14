@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Layer, LayerCategory, RasterAsset, VectorLayer
+from .models import Layer, LayerCategory, RasterAsset, UploadTask, VectorLayer
 
 
 class LayerCategorySerializer(serializers.ModelSerializer):
@@ -43,3 +43,20 @@ class LayerSerializer(serializers.ModelSerializer):
             "spatial_resolution_m", "native_crs", "bbox", "band_count", "pixel_dtype",
             "date_start", "date_end",
         ]
+
+
+class UploadTaskSerializer(serializers.ModelSerializer):
+    layer = serializers.SerializerMethodField()
+    layer_id = serializers.PrimaryKeyRelatedField(source="layer", read_only=True)
+
+    class Meta:
+        model = UploadTask
+        fields = [
+            "id", "status", "stage", "progress", "error_message",
+            "layer_id", "layer", "nc_variable", "created_at",
+        ]
+
+    def get_layer(self, obj):
+        if obj.status == "done" and obj.layer_id is not None:
+            return LayerSerializer(obj.layer).data
+        return None

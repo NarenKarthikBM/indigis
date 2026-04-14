@@ -1,20 +1,24 @@
 """
-MODIS Terra Monthly Land Surface Temperature source (MOD11A1 v061, 1 km).
+ASTER Digital Elevation Model source (AST14DEM v004, 30 m).
 
 Uses the NASA ``earthaccess`` library to authenticate with NASA Earthdata
-Login and download HDF4 granules from LP DAAC.  For each calendar month, all
-available granules are searched; the single day with the lowest aggregate
-cloud-cover (or, when cloud-cover metadata is absent, the day with the most
-tile coverage) is selected and its granules are warped to WGS-84, clipped to
-the configured bbox, mosaicked, and written as a float32 COG with LST values
-in degrees Celsius.
+Login and download HDF-EOS2 granules from LP DAAC (LPCLOUD provider).
+Each granule covers one ASTER scene; for each calendar month the granules
+with the lowest cloud-cover percentage are selected, warped to WGS-84,
+clipped to the configured bbox, mosaicked, and written as a float32 COG
+with elevation values in metres.
 
 Product details
 ---------------
-* Short name : MOD11A1 (Terra, daily)
-* Resolution : ~1 km
-* Band used  : LST_Day_1km  (scale = 0.02 K, fill = 0, valid 7500–65535)
-* Output     : float32 COG, LST in °C, nodata = -9999.0
+* Short name : AST14DEM (Terra/ASTER)
+* Version    : 004
+* Collection : C3306855744-LPCLOUD
+* Provider   : LPCLOUD
+* Resolution : 30 m × 30 m
+* Coverage   : [-180, -83, 180, 83]
+* Band used  : DEM (elevation in metres)
+* Output     : float32 COG, elevation in metres, nodata = -9999.0
+* DOI        : https://doi.org/10.5067/ASTER/AST14DEM.004
 
 Authentication
 --------------
@@ -28,14 +32,14 @@ Add these to your .env / Docker env.  A ``~/.netrc`` entry also works
 
 DataSource config (optional):
     {
-        "bbox":       [77.0, 23.0, 77.5, 23.5],  # west south east north
+        "bbox":       [77.0, 23.0, 97.5, 37.5],  # west south east north
         "start_date": "2024-01-01"                 # first month to fetch
     }
 
-One MiningJob is created per calendar month.  The source re-runs from the
-last missing month onward, so restarting after a gap back-fills automatically.
-Months where no valid LST data can be extracted are still marked "failed" so
-they are skipped on the next run.
+One MiningJob is created per calendar month from January 2024 onward.
+For each month, all available granules are searched; those with the lowest
+cloud-cover percentage are preferred so that the resulting mosaic uses the
+cleanest ASTER imagery available for that period.
 """
 
 import logging
@@ -55,27 +59,26 @@ from .base import BaseMiningSource
 
 logger = logging.getLogger(__name__)
 
-SHORT_NAME = "MOD11A1"
-VERSION = "061"
-SUBDATASET_BAND = "LST_Day_1km"
-SCALE_FACTOR = 0.02       # raw → Kelvin
-KELVIN_OFFSET = 273.15    # Kelvin → Celsius
-FILL_VALUE_RAW = 0        # fill / no-data in raw uint16
-VALID_MIN_RAW = 7500      # values below this are fill/cloud
-NODATA_OUT = -9999.0      # float32 nodata in output COG
+SHORT_NAME = "AST14DEM"
+VERSION = "004"
+# Keywords matched against HDF-EOS2 subdataset names to locate the DEM band.
+DEM_BAND_KEYWORDS = ("DEM",)
+NODATA_OUT = -9999.0                     # float32 nodata in output COG
 DEFAULT_BBOX = (68.0, 8.0, 97.5, 37.5)  # India
 DEFAULT_START = date(2024, 1, 1)
+# Maximum granules to download per month (sorted by ascending cloud cover).
+# Raise to improve spatial coverage at the cost of longer download times.
+MAX_GRANULES = 50
 
 
-class MODISLSTSource(BaseMiningSource):
+class AsterDEMSource(BaseMiningSource):
     """
-    Fetches MODIS Terra daytime LST (MOD11A1 v061) via earthaccess.
-    For each calendar month the day with the best data quality (lowest cloud
-    cover) is selected, its tiles mosaicked to the configured bbox, and the
-    result written as a float32 COG (°C).
+    Fetches ASTER DEM (AST14DEM v004) via earthaccess, mosaics the best
+    scenes (lowest cloud cover) within each calendar month to the configured
+    bbox, and writes a float32 COG (metres).
 
     Instantiate with the DataSource slug:
-        MODISLSTSource("modis-lst-monthly").run()
+        AsterDEMSource("aster-dem").run()
     """
 
     def __init__(self, datasource_slug: str):
@@ -88,7 +91,6 @@ class MODISLSTSource(BaseMiningSource):
     def get_periods_to_fetch(self) -> list[tuple[date, date]]:
         from apps.mining.models import DataSource, MiningJob
 
-        # Determine start month from config or default.
         try:
             cfg = DataSource.objects.get(slug=self.source_slug).config
             start_str = cfg.get("start_date")
@@ -100,12 +102,11 @@ class MODISLSTSource(BaseMiningSource):
         except DataSource.DoesNotExist:
             start_month = date(DEFAULT_START.year, DEFAULT_START.month, 1)
 
-        # Only fetch fully completed months.
+        # Only fetch months that have fully completed (up to end of last month).
         today = date.today()
-        last_complete = date(today.year, today.month, 1) - timedelta(days=1)
-        last_month_start = date(last_complete.year, last_complete.month, 1)
+        last_complete_month = date(today.year, today.month, 1) - timedelta(days=1)
+        last_month_start = date(last_complete_month.year, last_complete_month.month, 1)
 
-        # Months already done or failed — skip re-fetching to avoid infinite retries.
         done_months: set[date] = set(
             MiningJob.objects.filter(
                 source__slug=self.source_slug,
@@ -125,7 +126,7 @@ class MODISLSTSource(BaseMiningSource):
         return periods
 
     # ------------------------------------------------------------------
-    # Fetch — pick best day, download HDF4 granules, warp, mosaic, COG
+    # Fetch — select best granules, download, warp, mosaic, COG
     # ------------------------------------------------------------------
 
     def fetch(self, period_start: date, period_end: date) -> str:
@@ -136,72 +137,67 @@ class MODISLSTSource(BaseMiningSource):
         west, south, east, north = bbox
         month_label = period_start.strftime("%Y-%m")
 
-        logger.info("MODISLSTSource: authenticating with NASA Earthdata")
+        logger.info("AsterDEMSource: authenticating with NASA Earthdata")
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=FutureWarning, module="earthaccess")
             earthaccess.login(strategy="environment")
 
         logger.info(
-            "MODISLSTSource: searching %s v%s for %s bbox=%s",
+            "AsterDEMSource: searching %s v%s for %s bbox=%s",
             SHORT_NAME, VERSION, month_label, bbox,
         )
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=FutureWarning, module="earthaccess")
-            all_results = earthaccess.search_data(
+            results = earthaccess.search_data(
                 short_name=SHORT_NAME,
                 version=VERSION,
                 temporal=(period_start.isoformat(), period_end.isoformat()),
                 bounding_box=(west, south, east, north),
             )
 
-        if not all_results:
+        if not results:
             raise RuntimeError(
                 f"No {SHORT_NAME} granules found for {month_label} in bbox {bbox}. "
                 "Check Earthdata Login credentials and bbox coverage."
             )
 
         logger.info(
-            "MODISLSTSource: %d granule(s) found — selecting best day by cloud cover",
-            len(all_results),
+            "AsterDEMSource: %d granule(s) found — selecting up to %d with lowest cloud cover",
+            len(results), MAX_GRANULES,
         )
-        best_day, best_granules = _pick_best_day(all_results)
-        logger.info(
-            "MODISLSTSource: best day = %s (%d granule(s)) — downloading",
-            best_day, len(best_granules),
-        )
+        selected = _select_best_granules(results, MAX_GRANULES)
+        logger.info("AsterDEMSource: downloading %d granule(s)", len(selected))
 
-        with tempfile.TemporaryDirectory(prefix="modis_lst_") as tmp_dir:
+        with tempfile.TemporaryDirectory(prefix="aster_dem_") as tmp_dir:
             with warnings.catch_warnings():
                 warnings.filterwarnings("ignore", category=FutureWarning, module="earthaccess")
-                downloaded = earthaccess.download(best_granules, local_path=tmp_dir, threads=4)
+                downloaded = earthaccess.download(selected, local_path=tmp_dir, threads=4)
 
             if not downloaded:
                 raise RuntimeError(
-                    f"earthaccess.download returned no files for {month_label} (best day {best_day})"
+                    f"earthaccess.download returned no files for {month_label}"
                 )
 
             logger.info(
-                "MODISLSTSource: %d file(s) downloaded → processing", len(downloaded)
+                "AsterDEMSource: %d file(s) downloaded → processing", len(downloaded)
             )
 
             tile_paths: list[str] = []
             for hdf_path in downloaded:
                 try:
-                    tile_path = self._process_tile(hdf_path, bbox)
+                    tile_path = self._process_tile(str(hdf_path), bbox)
                     if tile_path:
                         tile_paths.append(tile_path)
                 except Exception as exc:
                     logger.warning(
-                        "MODISLSTSource: skipping %s — %s",
-                        os.path.basename(hdf_path), exc,
+                        "AsterDEMSource: skipping %s — %s",
+                        os.path.basename(str(hdf_path)), exc,
                     )
 
             if not tile_paths:
-                raise RuntimeError(
-                    f"No valid LST tiles extracted for {month_label} (best day {best_day})"
-                )
+                raise RuntimeError(f"No valid DEM tiles extracted for {month_label}")
 
-            dir_path = "/cogs/mining/modis-lst-monthly"
+            dir_path = "/cogs/mining/aster-dem"
             os.makedirs(dir_path, exist_ok=True)
             uid = str(uuid.uuid4())[:8]
             raw_path = os.path.join(dir_path, f"raw_{month_label}_{uid}.tif")
@@ -209,7 +205,7 @@ class MODISLSTSource(BaseMiningSource):
 
             try:
                 logger.info(
-                    "MODISLSTSource: mosaicking %d tile(s) → %s", len(tile_paths), raw_path
+                    "AsterDEMSource: mosaicking %d tile(s) → %s", len(tile_paths), raw_path
                 )
                 self._mosaic_tiles(tile_paths, raw_path, bbox)
             finally:
@@ -217,22 +213,21 @@ class MODISLSTSource(BaseMiningSource):
                     if os.path.exists(tp):
                         os.remove(tp)
 
-        logger.info("MODISLSTSource: converting to COG → %s", cog_path)
+        logger.info("AsterDEMSource: converting to COG → %s", cog_path)
         self._to_cog(raw_path, cog_path)
         os.remove(raw_path)
 
-        # Guard: reject entirely-nodata output.
         with rasterio.open(cog_path) as r:
             sample = r.read(1, out_shape=(min(r.height, 64), min(r.width, 64)))
             if np.all(sample == NODATA_OUT):
                 os.remove(cog_path)
                 raise RuntimeError(
-                    f"No valid LST pixels in bbox {bbox} for {month_label} "
+                    f"No valid DEM pixels in bbox {bbox} for {month_label} "
                     "(cloud contamination or missing data — month will be skipped on re-run)"
                 )
 
         logger.info(
-            "MODISLSTSource: COG ready %s (%d bytes)", cog_path, os.path.getsize(cog_path)
+            "AsterDEMSource: COG ready %s (%d bytes)", cog_path, os.path.getsize(cog_path)
         )
         return cog_path
 
@@ -250,44 +245,53 @@ class MODISLSTSource(BaseMiningSource):
             return DEFAULT_BBOX
 
     def _find_subdataset(self, hdf_path: str) -> str | None:
-        """Return the full subdataset URI for LST_Day_1km, or None if absent.
+        """Return the full subdataset URI for the DEM band, or None if absent.
 
-        Opening the HDF4 container (not a subdataset) always triggers
-        NotGeoreferencedWarning because the container has no geotransform —
-        only the subdatasets inside do.  Suppress it here; it is expected.
+        Opening the HDF-EOS2 container itself triggers NotGeoreferencedWarning
+        because only the inner subdatasets carry a geotransform; suppress it.
         """
         import warnings
 
         with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", category=rasterio.errors.NotGeoreferencedWarning)
+            warnings.filterwarnings(
+                "ignore", category=rasterio.errors.NotGeoreferencedWarning
+            )
             with rasterio.open(hdf_path) as src:
                 for sd in src.subdatasets or []:
-                    if SUBDATASET_BAND in sd:
+                    if any(kw in sd for kw in DEM_BAND_KEYWORDS):
                         return sd
         return None
 
     def _process_tile(self, hdf_path: str, bbox: tuple) -> str | None:
         """
-        Read LST_Day_1km from one HDF4 granule, apply scale/mask,
-        reproject to WGS-84, and write to a temporary GeoTIFF.
-        Returns the path of the temp file, or None if the tile has
-        no valid data within the bbox.
+        Read the DEM band from one HDF-EOS2 granule, reproject to WGS-84,
+        clip to bbox, and write a temporary GeoTIFF.
+        Returns the path, or None if the tile is entirely nodata.
         """
+        import warnings
+
         subdataset = self._find_subdataset(hdf_path)
-        if subdataset is None:
-            logger.warning("MODISLSTSource: '%s' not found in %s", SUBDATASET_BAND, hdf_path)
-            return None
+        open_path = subdataset if subdataset is not None else hdf_path
 
-        with rasterio.open(subdataset) as src:
-            raw = src.read(1).astype(np.float32)
-            src_crs = src.crs
-            src_transform = src.transform
-            src_width = src.width
-            src_height = src.height
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore", category=rasterio.errors.NotGeoreferencedWarning
+            )
+            with rasterio.open(open_path) as src:
+                raw = src.read(1).astype(np.float32)
+                src_crs = src.crs
+                src_transform = src.transform
+                src_width = src.width
+                src_height = src.height
+                src_nodata = src.nodata
 
-        # Mask fill values and out-of-range pixels
-        invalid = (raw == FILL_VALUE_RAW) | (raw < VALID_MIN_RAW)
-        lst_celsius = np.where(invalid, np.nan, raw * SCALE_FACTOR - KELVIN_OFFSET)
+        # ASTER DEM uses 0 as the fill value for ocean / no-data areas.
+        if src_nodata is not None:
+            invalid = raw == float(src_nodata)
+        else:
+            invalid = raw == 0.0
+
+        dem = np.where(invalid, np.nan, raw)
 
         # Reproject to WGS-84 (EPSG:4326)
         dst_crs = "EPSG:4326"
@@ -301,7 +305,7 @@ class MODISLSTSource(BaseMiningSource):
 
         dst_arr = np.full((dst_height, dst_width), np.nan, dtype=np.float32)
         reproject(
-            source=lst_celsius,
+            source=dem,
             destination=dst_arr,
             src_transform=src_transform,
             src_crs=src_crs,
@@ -312,18 +316,16 @@ class MODISLSTSource(BaseMiningSource):
             dst_nodata=np.nan,
         )
 
-        # Replace NaN → NODATA_OUT for rasterio write
         dst_arr = np.where(np.isnan(dst_arr), NODATA_OUT, dst_arr)
 
-        # Skip tile if entirely nodata
         if np.all(dst_arr == NODATA_OUT):
             logger.debug(
-                "MODISLSTSource: tile %s is entirely nodata — skipping",
+                "AsterDEMSource: tile %s is entirely nodata — skipping",
                 os.path.basename(hdf_path),
             )
             return None
 
-        tile_path = tempfile.mktemp(suffix="_modis_tile.tif")
+        tile_path = tempfile.mktemp(suffix="_aster_tile.tif")
         profile = {
             "driver": "GTiff",
             "dtype": "float32",
@@ -341,7 +343,7 @@ class MODISLSTSource(BaseMiningSource):
         return tile_path
 
     def _mosaic_tiles(self, tile_paths: list[str], output_path: str, bbox: tuple) -> None:
-        """Merge all warped tile GeoTIFFs, clip to bbox, write merged GeoTIFF."""
+        """Merge warped tile GeoTIFFs, clip to bbox, write merged GeoTIFF."""
         west, south, east, north = bbox
         datasets = [rasterio.open(tp) for tp in tile_paths]
         try:
@@ -376,22 +378,11 @@ class MODISLSTSource(BaseMiningSource):
 # Module-level helpers
 # ------------------------------------------------------------------
 
-def _granule_date(granule) -> str:
-    """Extract the acquisition date string (YYYY-MM-DD) from granule metadata."""
-    try:
-        temporal = granule.get("umm", {}).get("TemporalExtent", {})
-        range_dt = temporal.get("RangeDateTime", {})
-        dt_str = range_dt.get("BeginningDateTime", "")
-        return dt_str[:10]  # YYYY-MM-DD
-    except Exception:
-        return ""
-
-
 def _cloud_cover(granule) -> float:
-    """Extract cloud cover percentage (0–100) from granule CMR metadata.
+    """Extract cloud cover percentage (0–100) from earthaccess granule metadata.
 
-    Returns 100.0 when the attribute is absent so that granules without
-    metadata sort to the end.
+    Falls back to 100.0 (worst) when the CMR record does not carry a
+    CloudCover attribute, so those granules sort to the end of the list.
     """
     try:
         cc = granule.get("umm", {}).get("CloudCover")
@@ -402,39 +393,9 @@ def _cloud_cover(granule) -> float:
     return 100.0
 
 
-def _pick_best_day(results) -> tuple[str, list]:
-    """Group granules by acquisition date and return the best day.
-
-    "Best" is the date whose granules have the lowest mean cloud-cover
-    percentage.  When cloud-cover metadata is missing for all granules,
-    the date with the most granules (widest spatial coverage) is used.
-
-    Returns (date_str, granule_list).
-    """
-    from collections import defaultdict
-
-    by_date: dict[str, list] = defaultdict(list)
-    for g in results:
-        d = _granule_date(g)
-        if d:
-            by_date[d].append(g)
-
-    if not by_date:
-        # Fall back: return all results as a single group if dates are unparseable.
-        return ("unknown", results)
-
-    # Score each date: lower is better.
-    # Primary key: mean cloud cover (lower = clearer sky).
-    # Secondary key: negative tile count (more tiles = better coverage, used as
-    #   tiebreaker and as the sole metric when cloud cover is always 100).
-    def score(date_granules):
-        granules = date_granules[1]
-        covers = [_cloud_cover(g) for g in granules]
-        mean_cc = sum(covers) / len(covers)
-        return (mean_cc, -len(granules))
-
-    best_date, best_granules = min(by_date.items(), key=score)
-    return (best_date, best_granules)
+def _select_best_granules(results, max_count: int):
+    """Return up to *max_count* granules sorted by ascending cloud cover."""
+    return sorted(results, key=_cloud_cover)[:max_count]
 
 
 def _month_end(d: date) -> date:
