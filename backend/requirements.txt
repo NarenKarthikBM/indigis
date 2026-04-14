@@ -23,3 +23,4 @@ AHPy==2.1
 python-cdo-wrapper==1.1.2
 xarray>=2024.1
 rioxarray>=0.17
+cdsapi>=0.7.7
