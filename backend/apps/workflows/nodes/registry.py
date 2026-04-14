@@ -456,7 +456,31 @@ NODE_CATALOG = [
         "inputs": _RASTER_IN,
         "outputs": _RASTER_OUT,
     },
-    # ── Urban / Built-up ──────────────────────────────────────────────────────
+    # ── Urban / Built-up / Heat Island ────────────────────────────────────────
+    {
+        "type": "ndbi",
+        "label": "NDBI",
+        "category": "processing",
+        "description": "Normalized Difference Built-up Index (SWIR−NIR)/(SWIR+NIR)",
+        "inputs": _RASTER_IN,
+        "outputs": _RASTER_OUT,
+    },
+    {
+        "type": "utfvi",
+        "label": "UTFVI",
+        "category": "processing",
+        "description": "Urban Thermal Field Variance Index (Ts−Tmean)/Tmean",
+        "inputs": _RASTER_IN,
+        "outputs": _RASTER_OUT,
+    },
+    {
+        "type": "uhi",
+        "label": "UHI",
+        "category": "processing",
+        "description": "Standardized Urban Heat Island intensity (Ts−Tmean)/σT",
+        "inputs": _RASTER_IN,
+        "outputs": _RASTER_OUT,
+    },
     {
         "type": "ui",
         "label": "UI",
@@ -618,7 +642,7 @@ from .processing import (
     cigreen_node, cired_node, ndre_node,
     osavi_node, tsavi_node,
     vari_node, avi_node, arvi_node,
-    ndti_node, wri_node, ui_node,
+    ndti_node, wri_node, ui_node, ndbi_node, utfvi_node, uhi_node,
     nbr2_node, bai_node, csi_node, s3_node,
     hot_node, shadow_index_node,
     # Terrain analysis
@@ -692,6 +716,9 @@ NODE_REGISTRY = {
     "arvi": arvi_node,
     "ndti": ndti_node,
     "wri": wri_node,
+    "ndbi": ndbi_node,
+    "utfvi": utfvi_node,
+    "uhi": uhi_node,
     "ui": ui_node,
     "nbr2": nbr2_node,
     "bai": bai_node,

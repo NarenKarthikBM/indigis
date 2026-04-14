@@ -330,10 +330,10 @@ class ERA5DailySource:
         da = da.rio.write_crs("EPSG:4326")
 
         result: dict[str, str] = {}
-        for t in da.time:
+        for t in da.valid_time:
             label = str(t.dt.strftime("%Y%m%d").values)
             tif_path = os.path.join(out_dir, f"{nc_var}_{label}_raw.tif")
-            da.sel(time=t).rio.to_raster(tif_path)
+            da.sel(valid_time=t).rio.to_raster(tif_path)
             result[label] = tif_path
 
         ds.close()

@@ -944,7 +944,57 @@ def s3_node(inputs: dict, config: dict) -> dict:
     return {"type": "raster", "path": path, "metadata": {}}
 
 
-## SPECTRAL INDICES – Urban / Built-up
+## SPECTRAL INDICES – Urban Heat Island / Built-up
+
+def ndbi_node(inputs: dict, config: dict) -> dict:
+    raster_in = inputs.get("raster_in")
+    if not raster_in:
+        raise ValueError("ndbi requires 'raster_in' input")
+    swir_band = int(config.get("swir_band", 6))
+    nir_band = int(config.get("nir_band", 5))
+    with rasterio.open(raster_in["path"]) as src:
+        _check_bands(src, swir_band, nir_band, node_name="ndbi")
+        swir = src.read(swir_band, masked=True).astype(np.float32)
+        nir = src.read(nir_band, masked=True).astype(np.float32)
+        profile = src.profile.copy()
+    path = _write_raster(_norm_diff(swir, nir), profile, "_ndbi.tif")
+    return {"type": "raster", "path": path, "metadata": {}}
+
+
+def utfvi_node(inputs: dict, config: dict) -> dict:
+    raster_in = inputs.get("raster_in")
+    if not raster_in:
+        raise ValueError("utfvi requires 'raster_in' input (LST raster)")
+    with rasterio.open(raster_in["path"]) as src:
+        Ts = src.read(1, masked=True).astype(np.float32)
+        profile = src.profile.copy()
+    valid = Ts.compressed() if np.ma.is_masked(Ts) else Ts.ravel()
+    Tmean = float(np.nanmean(valid))
+    if np.isnan(Tmean) or Tmean == 0:
+        raise ValueError("Invalid mean temperature (Tmean) computed from raster.")
+    utfvi = np.ma.filled((Ts - Tmean) / Tmean, _NODATA).astype(np.float32)
+    utfvi[np.ma.getmaskarray(Ts)] = _NODATA
+    path = _write_raster(utfvi, profile, "_utfvi.tif")
+    return {"type": "raster", "path": path, "metadata": {"Tmean": Tmean}}
+
+
+def uhi_node(inputs: dict, config: dict) -> dict:
+    raster_in = inputs.get("raster_in")
+    if not raster_in:
+        raise ValueError("uhi requires 'raster_in' input (LST raster)")
+    with rasterio.open(raster_in["path"]) as src:
+        Ts = src.read(1, masked=True).astype(np.float32)
+        profile = src.profile.copy()
+    valid = Ts.compressed() if np.ma.is_masked(Ts) else Ts.ravel()
+    Tmean = float(np.nanmean(valid))
+    sigma_T = float(np.nanstd(valid))
+    if np.isnan(Tmean) or np.isnan(sigma_T) or sigma_T == 0:
+        raise ValueError("Invalid statistics computed from raster (mean/std).")
+    uhi = np.ma.filled((Ts - Tmean) / sigma_T, _NODATA).astype(np.float32)
+    uhi[np.ma.getmaskarray(Ts)] = _NODATA
+    path = _write_raster(uhi, profile, "_uhi.tif")
+    return {"type": "raster", "path": path, "metadata": {"Tmean": Tmean, "sigma_T": sigma_T}}
+
 
 def ui_node(inputs: dict, config: dict) -> dict:
     raster_in = inputs.get("raster_in")
