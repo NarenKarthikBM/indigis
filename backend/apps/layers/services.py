@@ -190,7 +190,7 @@ def extract_nc_variable_to_tiffs(nc_path: str, variable: str, out_dir: str) -> l
         from python_cdo_wrapper import CDO
 
         cdo = CDO()
-        ds = cdo.query("data.nc").select_var(variable).compute()
+        ds = cdo.query(nc_path).select_var(variable).compute()
     except Exception:
         # Fall back to opening directly when CDO is unavailable
         ds = xr.open_dataset(nc_path)
