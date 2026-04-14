@@ -206,15 +206,20 @@ def extract_nc_variable_to_tiffs(nc_path: str, variable: str, out_dir: str) -> l
         for t in da.time:
             label = str(t.dt.strftime("%Y%m%d").values)
             tif_path = os.path.join(out_dir, f"{variable}_{label}.tif")
-            da.sel(time=t).rio.to_raster(tif_path)
-            data = xr.open_dataarray(tif_path)
-            valid = data.values[~np.isnan(data.values)]
-            results["min"] = np.min(valid) if valid.size > 0 and results["min"] < np.min(valid) else results["min"]
-            results["max"] = np.max(valid) if valid.size > 0 and results["max"] > np.max(valid) else results["max"]
+
+            time_slice = da.sel(time=t)
+            time_slice.rio.to_raster(tif_path)
+
+            valid = time_slice.values[~np.isnan(time_slice.values)]
+            results["min"] = np.min(valid) if valid.size > 0 and results["min"] > np.min(valid) else results["min"]
+            results["max"] = np.max(valid) if valid.size > 0 and np.max(valid) > results["max"] else results["max"]
             results["rasters"].append({"path": tif_path, "period_label": label, "time": t.values})
     else:
         tif_path = os.path.join(out_dir, f"{variable}.tif")
         da.rio.to_raster(tif_path)
+        valid = da.values[~np.isnan(da.values)]
+        results["min"] = np.min(valid) if valid.size > 0 and results["min"] > np.min(valid) else results["min"]
+        results["max"] = np.max(valid) if valid.size > 0 and np.max(valid) > results["max"] else results["max"]
         results["rasters"].append({"path": tif_path, "period_label": "", "time": None})
 
     ds.close()
