@@ -289,22 +289,25 @@ class ERA5DailySource:
         all_days = [f"{d:02d}" for d in range(1, 32)]
         bbox = self.config.get("bbox", [37.5, 68.0, 8.0, 97.5])  # N, W, S, E
 
-        c.retrieve(
-            "derived-era5-single-levels-daily-statistics",
-            {
-                "product_type": "reanalysis",
-                "variable": variable,
-                "year": str(year),
-                "month": all_months,
-                "day": all_days,
-                "daily_statistic": cds_stat,
-                "time_zone": "UTC+0:00",
-                "frequency": "1_hourly",
-                "area": bbox,
-                "data_format": "netcdf",
-            },
-            out_path,
-        )
+        try:
+            c.retrieve(
+                "derived-era5-single-levels-daily-statistics",
+                {
+                    "product_type": "reanalysis",
+                    "variable": variable,
+                    "year": str(year),
+                    "month": all_months,
+                    "day": all_days,
+                    "daily_statistic": cds_stat,
+                    "time_zone": "UTC+0:00",
+                    "frequency": "6_hourly",
+                    "area": bbox,
+                    "data_format": "netcdf",
+                },
+                out_path,
+            )
+        except Exception as exc:
+            print(f"CDS API download failed: {exc}")
 
     def _extract_daily_tiffs(self, nc_path: str, nc_var: str, out_dir: str) -> dict[str, str]:
         """Extract per-day raw TIFFs from NC file. Returns {YYYYMMDD: path}."""
