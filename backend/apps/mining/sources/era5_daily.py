@@ -211,6 +211,7 @@ class ERA5DailySource:
                     self._to_cog(raw_tif, cog_path)
 
                     day = date(int(date_label[:4]), int(date_label[4:6]), int(date_label[6:8]))
+                    min_val, max_val = self._compute_min_max(cog_path)
                     self._register_asset(
                         layer_slug=sc["daily_layer"],
                         cog_path=cog_path,
@@ -218,6 +219,8 @@ class ERA5DailySource:
                         period_start=day,
                         period_end=day,
                         job=job,
+                        min_value=min_val,
+                        max_value=max_val,
                     )
                     daily_cog_map[date_label] = cog_path
 
@@ -240,6 +243,7 @@ class ERA5DailySource:
                         mo = int(month_key[4:])
                         import calendar
                         last_day = calendar.monthrange(yr, mo)[1]
+                        min_val, max_val = self._compute_min_max(monthly_cog)
                         self._register_asset(
                             layer_slug=sc["monthly_layer"],
                             cog_path=monthly_cog,
@@ -247,6 +251,8 @@ class ERA5DailySource:
                             period_start=date(yr, mo, 1),
                             period_end=date(yr, mo, last_day),
                             job=job,
+                            min_value=min_val,
+                            max_value=max_val,
                         )
 
                 # 6. Yearly aggregation
@@ -254,6 +260,7 @@ class ERA5DailySource:
                 yearly_cog = self._cog_output_path(variable, sc["yearly_layer"], str(year))
                 os.makedirs(os.path.dirname(yearly_cog), exist_ok=True)
                 self._aggregate_tiffs(all_year_cogs, sc["yearly_agg"], yearly_cog)
+                min_val, max_val = self._compute_min_max(yearly_cog)
                 self._register_asset(
                     layer_slug=sc["yearly_layer"],
                     cog_path=yearly_cog,
@@ -261,6 +268,8 @@ class ERA5DailySource:
                     period_start=date(year, 1, 1),
                     period_end=date(year, 12, 31),
                     job=job,
+                    min_value=min_val,
+                    max_value=max_val,
                 )
 
                 # 7. Cleanup NC and raw TIFFs
@@ -409,6 +418,27 @@ class ERA5DailySource:
         from apps.layers.services import convert_to_cog
         convert_to_cog(src_path, dst_path)
 
+    @staticmethod
+    def _compute_min_max(cog_path: str) -> tuple[float | None, float | None]:
+        """Read a COG and return (min, max) of valid (non-nodata) pixels."""
+        import rasterio
+
+        try:
+            with rasterio.open(cog_path) as src:
+                overview_shape = (
+                    src.count,
+                    max(1, src.height // 16),
+                    max(1, src.width // 16),
+                )
+                data = src.read(out_shape=overview_shape, masked=True)
+                valid = data.compressed()
+                if valid.size == 0:
+                    return None, None
+                return round(float(np.min(valid)), 6), round(float(np.max(valid)), 6)
+        except Exception as exc:
+            print(f"_compute_min_max failed for {cog_path}: {exc}")
+            return None, None
+
     def _register_asset(
         self,
         layer_slug: str,
@@ -417,6 +447,8 @@ class ERA5DailySource:
         period_start: date,
         period_end: date,
         job,
+        min_value: float | None = None,
+        max_value: float | None = None,
     ) -> None:
         from apps.layers.models import Layer
         from apps.layers.services import create_raster_asset_and_queue_stats
@@ -440,6 +472,8 @@ class ERA5DailySource:
             data_period_end=period_end,
             source="bot",
             mining_job=job,
+            min_value=min_value,
+            max_value=max_value,
         )
 
     @staticmethod

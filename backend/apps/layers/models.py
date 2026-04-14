@@ -91,6 +91,8 @@ class RasterAsset(models.Model):
     data_period_start = models.DateField(null=True, blank=True)
     data_period_end = models.DateField(null=True, blank=True)
     source = models.CharField(max_length=20, choices=SOURCE_CHOICES, default=SOURCE_USER)
+    min_value = models.FloatField(null=True, blank=True)
+    max_value = models.FloatField(null=True, blank=True)
     mining_job = models.ForeignKey(
         "mining.MiningJob",
         on_delete=models.SET_NULL,

@@ -101,8 +101,11 @@ class TileURLView(APIView):
             colormap = layer.default_colormap.get("name", "viridis")
 
         rescale = request.query_params.get("rescale")
-        if not rescale and layer.min_value is not None and layer.max_value is not None:
-            rescale = f"{layer.min_value},{layer.max_value}"
+        if not rescale: 
+            if asset.min_value is not None and asset.max_value is not None:
+                rescale = f"{asset.min_value},{asset.max_value}"
+            if layer.min_value is not None and layer.max_value is not None:
+                rescale = f"{layer.min_value},{layer.max_value}"
 
         bidx_raw = request.query_params.get("bidx")
         bidx = None
