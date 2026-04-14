@@ -30,10 +30,12 @@ class Layer(models.Model):
     TYPE_CHOICES = [(TYPE_RASTER, "Raster"), (TYPE_VECTOR, "Vector")]
 
     TEMPORAL_STATIC = "static"
+    TEMPORAL_DAILY = "daily"
     TEMPORAL_ANNUAL = "annual"
     TEMPORAL_MONTHLY = "monthly"
     TEMPORAL_CHOICES = [
         (TEMPORAL_STATIC, "Static"),
+        (TEMPORAL_DAILY, "Daily"),
         (TEMPORAL_ANNUAL, "Annual"),
         (TEMPORAL_MONTHLY, "Monthly"),
     ]

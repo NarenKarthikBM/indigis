@@ -64,6 +64,15 @@ class TriggerMiningView(APIView):
             )
             return Response({"status": "queued", "source": slug}, status=status.HTTP_202_ACCEPTED)
 
+        # CDS (ERA5) sources share one parametric task
+        if ds.source_type == DataSource.SOURCE_CDS:
+            current_app.send_task(
+                "apps.mining.tasks.mine_era5_sources",
+                kwargs={"slug": slug},
+                queue="mining",
+            )
+            return Response({"status": "queued", "source": slug}, status=status.HTTP_202_ACCEPTED)
+
         task_name = _TASK_MAP.get(slug)
         if task_name is None:
             return Response(

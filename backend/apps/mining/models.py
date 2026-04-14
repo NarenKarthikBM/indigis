@@ -12,6 +12,7 @@ class DataSource(models.Model):
     SOURCE_OPENTOPO = "opentopo"
     SOURCE_STAC = "stac"
     SOURCE_EARTHACCESS = "earthaccess"
+    SOURCE_CDS = "cds"
     SOURCE_TYPE_CHOICES = [
         (SOURCE_GEE, "GEE"),
         (SOURCE_CHIRPS, "CHIRPS"),
@@ -21,6 +22,7 @@ class DataSource(models.Model):
         (SOURCE_OPENTOPO, "OpenTopography"),
         (SOURCE_STAC, "STAC Catalogue"),
         (SOURCE_EARTHACCESS, "NASA Earthaccess"),
+        (SOURCE_CDS, "Copernicus Data Store"),
     ]
 
     slug = models.SlugField(unique=True)

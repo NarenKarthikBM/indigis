@@ -23,6 +23,12 @@ _EARTHACCESS_REGISTRY: dict[str, str] = {
     "aster-dem":         "apps.mining.sources.aster_dem.AsterDEMSource",
 }
 
+# Registry of slug → dotted class path for CDS (ERA5) sources.
+_ERA5_REGISTRY: dict[str, str] = {
+    "era5-2m-temperature":     "apps.mining.sources.era5_daily.ERA5DailySource",
+    "era5-total-precipitation": "apps.mining.sources.era5_daily.ERA5DailySource",
+}
+
 
 def _import_source_class(dotted_path: str):
     module_path, class_name = dotted_path.rsplit(".", 1)
@@ -137,6 +143,41 @@ def mine_earthaccess_sources(slug: str | None = None):
         if dotted is None:
             logger.warning(
                 "mine_earthaccess_sources: no class registered for slug '%s' — skipping.", ds_slug
+            )
+            continue
+        SourceClass = _import_source_class(dotted)
+        SourceClass(ds_slug).run()
+
+
+@shared_task(name="apps.mining.tasks.mine_era5_sources", queue="mining")
+def mine_era5_sources(slug: str | None = None):
+    """
+    Fetch one or all active CDS (ERA5) DataSources.
+
+    If *slug* is given, runs only that source (must be in _ERA5_REGISTRY).
+    Otherwise runs every active DataSource with source_type="cds" that
+    has a matching entry in _ERA5_REGISTRY.
+
+    Requires CDS_API_URL and CDS_API_KEY environment variables
+    (or a valid ~/.cdsapirc file).
+    """
+    from apps.mining.models import DataSource
+
+    if slug:
+        slugs = [slug]
+    else:
+        slugs = list(
+            DataSource.objects.filter(source_type="cds", is_active=True).values_list(
+                "slug", flat=True
+            )
+        )
+
+    logger.info("mine_era5_sources: running %d source(s)", len(slugs))
+    for ds_slug in slugs:
+        dotted = _ERA5_REGISTRY.get(ds_slug)
+        if dotted is None:
+            logger.warning(
+                "mine_era5_sources: no class registered for slug '%s' — skipping.", ds_slug
             )
             continue
         SourceClass = _import_source_class(dotted)
