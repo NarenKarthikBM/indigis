@@ -199,7 +199,7 @@ def extract_nc_variable_to_tiffs(nc_path: str, variable: str, out_dir: str) -> l
     except Exception:
         pass
 
-    results = { "rasters": [], "min": 0, "max": 0 }
+    results = { "rasters": [], "min": float("inf"), "max": float("-inf") }
     if "time" in da.dims:
         if "level" in da.dims:
             da = da.isel(level=0)  # select first level if present, to simplify
@@ -211,15 +211,17 @@ def extract_nc_variable_to_tiffs(nc_path: str, variable: str, out_dir: str) -> l
             time_slice.rio.to_raster(tif_path)
 
             valid = time_slice.values[~np.isnan(time_slice.values)]
-            results["min"] = np.min(valid) if valid.size > 0 and results["min"] > np.min(valid) else results["min"]
-            results["max"] = np.max(valid) if valid.size > 0 and np.max(valid) > results["max"] else results["max"]
+            if valid.size > 0:
+                results["min"] = min(results["min"], np.min(valid))
+                results["max"] = max(results["max"], np.max(valid))
             results["rasters"].append({"path": tif_path, "period_label": label, "time": t.values})
     else:
         tif_path = os.path.join(out_dir, f"{variable}.tif")
         da.rio.to_raster(tif_path)
         valid = da.values[~np.isnan(da.values)]
-        results["min"] = np.min(valid) if valid.size > 0 and results["min"] > np.min(valid) else results["min"]
-        results["max"] = np.max(valid) if valid.size > 0 and np.max(valid) > results["max"] else results["max"]
+        if valid.size > 0:
+            results["min"] = min(results["min"], np.min(valid))
+            results["max"] = max(results["max"], np.max(valid))
         results["rasters"].append({"path": tif_path, "period_label": "", "time": None})
 
     ds.close()
