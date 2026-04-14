@@ -117,11 +117,11 @@ class ERA5DailySource:
         try:
             ds = DataSource.objects.get(slug=self.datasource_slug)
         except DataSource.DoesNotExist:
-            logger.warning("DataSource '%s' not found — skipping.", self.datasource_slug)
+            print("DataSource '%s' not found — skipping.", self.datasource_slug)
             return
 
         if not ds.is_active:
-            logger.info("DataSource '%s' is inactive — skipping.", self.datasource_slug)
+            print("DataSource '%s' is inactive — skipping.", self.datasource_slug)
             return
 
         self._ds = ds
@@ -129,7 +129,7 @@ class ERA5DailySource:
 
         variable = self.config.get("variable")
         if variable not in STAT_CONFIGS:
-            logger.error(
+            print(
                 "DataSource '%s' has unknown variable '%s'. Expected one of: %s",
                 self.datasource_slug,
                 variable,
@@ -139,7 +139,7 @@ class ERA5DailySource:
 
         years = self.get_periods_to_fetch()
         if not years:
-            logger.info("No new years to fetch for '%s'.", self.datasource_slug)
+            print("No new years to fetch for '%s'.", self.datasource_slug)
             return
 
         for year in years:
@@ -154,7 +154,7 @@ class ERA5DailySource:
                 period_end=period_end,
                 started_at=timezone.now(),
             )
-            logger.info("ERA5 job %s started: %s year=%d", job.id, self.datasource_slug, year)
+            print("ERA5 job %s started: %s year=%d", job.id, self.datasource_slug, year)
 
             try:
                 self._process_year(year, job)
@@ -165,14 +165,14 @@ class ERA5DailySource:
                 ds.last_fetched_at = timezone.now()
                 ds.save(update_fields=["last_fetched_at"])
 
-                logger.info("ERA5 job %s done (year=%d)", job.id, year)
+                print("ERA5 job %s done (year=%d)", job.id, year)
 
             except Exception as exc:
                 job.status = MiningJob.STATUS_FAILED
                 job.error_message = str(exc)
                 job.completed_at = timezone.now()
                 job.save()
-                logger.error("ERA5 job %s failed (year=%d): %s", job.id, year, exc, exc_info=True)
+                print("ERA5 job %s failed (year=%d): %s", job.id, year, exc, exc_info=True)
 
     # ------------------------------------------------------------------
     # Per-year processing
@@ -187,7 +187,7 @@ class ERA5DailySource:
         try:
             for sc in STAT_CONFIGS[variable]:
                 cds_stat = sc["cds_stat"]
-                logger.info("ERA5: downloading %s / %s / %d", variable, cds_stat, year)
+                print("ERA5: downloading %s / %s / %d", variable, cds_stat, year)
 
                 # 1. Download NC for the full year
                 nc_path = os.path.join(tmp_root, f"{variable}_{cds_stat}_{year}.nc")
@@ -421,7 +421,7 @@ class ERA5DailySource:
         try:
             layer = Layer.objects.get(slug=layer_slug)
         except Layer.DoesNotExist:
-            logger.warning(
+            print(
                 "_register_asset: Layer '%s' not found — skipping asset registration. "
                 "Run setup_era5_sources to create Layer records.",
                 layer_slug,
