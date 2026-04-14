@@ -38,6 +38,9 @@ def build_titiler_url(cog_url, colormap="viridis", rescale=None, titiler_base=No
         if rescale:
             url += f"&rescale={rescale}&rescale={rescale}&rescale={rescale}"
     else:
+        # Single-band or multi-band shown as colormap — always select band 1
+        # so TiTiler doesn't receive a multi-band source with a colormap applied.
+        url += "&bidx=1"
         url += f"&colormap_name={colormap}"
         if rescale:
             url += f"&rescale={rescale}"
