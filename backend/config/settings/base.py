@@ -144,7 +144,7 @@ CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
 
-UPLOAD_TMP_PATH = "/tmp"
+UPLOAD_TMP_PATH = os.environ.get("UPLOAD_TMP_PATH", "/cogs/uploads")
 
 # OpenTopography API key — override in .env or per-DataSource config
 OPENTOPO_API_KEY = os.environ.get("OPENTOPO_API_KEY", "")

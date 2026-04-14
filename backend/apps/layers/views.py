@@ -267,6 +267,7 @@ class RasterUploadAsyncView(APIView):
             return Response({"detail": "file is required."}, status=status.HTTP_400_BAD_REQUEST)
 
         tmp_dir = getattr(settings, "UPLOAD_TMP_PATH", "/tmp")
+        os.makedirs(tmp_dir, exist_ok=True)
         stable_path = os.path.join(tmp_dir, f"upload_{uuid.uuid4().hex}.tif")
 
         # Use shutil.move for large files that Django already spooled to disk
@@ -309,6 +310,7 @@ class NetCDFInspectView(APIView):
             return Response({"detail": "file is required."}, status=status.HTTP_400_BAD_REQUEST)
 
         tmp_dir = getattr(settings, "UPLOAD_TMP_PATH", "/tmp")
+        os.makedirs(tmp_dir, exist_ok=True)
         tmp_nc_path = os.path.join(tmp_dir, f"nc_{uuid.uuid4().hex}.nc")
 
         if hasattr(file, "temporary_file_path"):
