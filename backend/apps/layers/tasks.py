@@ -154,7 +154,8 @@ def process_netcdf_variable(self, task_id: str):
         meta = task.metadata_json
 
         # ── 1. Extract variable to per-time-step TIFFs ────────────────────
-        tif_list = services.extract_nc_variable_to_tiffs(task.file_path, variable, out_dir)
+        extracted_tifs = services.extract_nc_variable_to_tiffs(task.file_path, variable, out_dir)
+        tif_list = extracted_tifs["rasters"]
 
         # ── 2. Create one Layer for this variable ─────────────────────────
         services._update_task_stage(task_id, UploadTask.STAGE_REGISTERING, 40)
@@ -168,6 +169,8 @@ def process_netcdf_variable(self, task_id: str):
             slug=layer_slug,
             label=label,
             category=category,
+            min_value=extracted_tifs.get("min"),
+            max_value=extracted_tifs.get("max"),
             layer_type="raster",
             default_colormap={"name": colormap_name},
             description=meta.get("description", ""),

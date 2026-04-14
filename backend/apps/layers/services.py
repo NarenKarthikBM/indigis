@@ -199,7 +199,7 @@ def extract_nc_variable_to_tiffs(nc_path: str, variable: str, out_dir: str) -> l
     except Exception:
         pass
 
-    results = []
+    results = { "rasters": [], "min": 0, "max": 0 }
     if "time" in da.dims:
         if "level" in da.dims:
             da = da.isel(level=0)  # select first level if present, to simplify
@@ -209,13 +209,13 @@ def extract_nc_variable_to_tiffs(nc_path: str, variable: str, out_dir: str) -> l
             da.sel(time=t).rio.to_raster(tif_path)
             data = xr.open_dataarray(tif_path)
             valid = data.values[~np.isnan(data.values)]
-            print(f"TIFF: Min: {np.min(valid)}, Max: {np.max(valid)}, Mean: {np.mean(valid)}")
-            print("NC: Min: {}, Max: {}, Mean: {}".format(np.min(da.sel(time=t).values), np.max(da.sel(time=t).values), np.mean(da.sel(time=t).values)))
-            results.append({"path": tif_path, "period_label": label, "time": t.values})
+            results["min"] = np.min(valid) if valid.size > 0 and results["min"] < np.min(valid) else results["min"]
+            results["max"] = np.max(valid) if valid.size > 0 and results["max"] > np.max(valid) else results["max"]
+            results["rasters"].append({"path": tif_path, "period_label": label, "time": t.values})
     else:
         tif_path = os.path.join(out_dir, f"{variable}.tif")
         da.rio.to_raster(tif_path)
-        results.append({"path": tif_path, "period_label": "", "time": None})
+        results["rasters"].append({"path": tif_path, "period_label": "", "time": None})
 
     ds.close()
     return results
