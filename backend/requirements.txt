@@ -10,7 +10,7 @@ dj-database-url==2.1.0
 python-dotenv==1.0.1
 rasterio==1.4.3
 rio-cogeo==5.4.0
-numpy>=1.24
+numpy==1.26.4
 shapely>=2.0
 rasterstats>=0.19
 celery>=5.3
@@ -20,6 +20,6 @@ requests>=2.31
 pystac-client>=0.7
 earthaccess>=0.11
 AHPy==2.1
-python-cdo-wrapper>=0.1
+python-cdo-wrapper==1.1.2
 xarray>=2024.1
 rioxarray>=0.17
