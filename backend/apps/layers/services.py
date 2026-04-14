@@ -207,6 +207,10 @@ def extract_nc_variable_to_tiffs(nc_path: str, variable: str, out_dir: str) -> l
             label = str(t.dt.strftime("%Y%m%d").values)
             tif_path = os.path.join(out_dir, f"{variable}_{label}.tif")
             da.sel(time=t).rio.to_raster(tif_path)
+            data = xr.open_dataarray(tif_path)
+            valid = data.values[~np.isnan(data.values)]
+            print(f"TIFF: Min: {np.min(valid)}, Max: {np.max(valid)}, Mean: {np.mean(valid)}")
+            print("NC: Min: {}, Max: {}, Mean: {}".format(np.min(da.sel(time=t).values), np.max(da.sel(time=t).values), np.mean(da.sel(time=t).values)))
             results.append({"path": tif_path, "period_label": label, "time": t.values})
     else:
         tif_path = os.path.join(out_dir, f"{variable}.tif")
