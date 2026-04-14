@@ -213,9 +213,10 @@ def extract_nc_variable_to_tiffs(nc_path: str, variable: str, out_dir: str) -> l
         dim one step at a time until only (y, x) remain.
         """
         slice_da = slice_da.squeeze(drop=True)
-        spatial_dims = set(slice_da.rio.dims) if hasattr(slice_da, "rio") else set()
-        # Fallback: treat last two dims as spatial if rio doesn't expose them
-        if not spatial_dims and len(slice_da.dims) >= 2:
+        try:
+            spatial_dims = {slice_da.rio.x_dim, slice_da.rio.y_dim}
+        except Exception:
+            # Fallback: treat last two dims as spatial
             spatial_dims = set(slice_da.dims[-2:])
         while len(slice_da.dims) > 2:
             extra = next(d for d in slice_da.dims if d not in spatial_dims)
