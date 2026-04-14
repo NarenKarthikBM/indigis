@@ -190,7 +190,7 @@ class ERA5DailySource:
                 print("ERA5: downloading %s / %s / %d", variable, cds_stat, year)
 
                 # 1. Download NC for the full year
-                nc_path = os.path.join(tmp_root, f"{variable}_{cds_stat}_{year}.grb")
+                nc_path = os.path.join(tmp_root, f"{variable}_{cds_stat}_{year}.nc")
                 self._download_nc(variable, cds_stat, year, nc_path)
 
                 # 2. Extract per-day raw TIFFs
@@ -302,6 +302,7 @@ class ERA5DailySource:
                     "time_zone": "utc+00:00",
                     "frequency": "6_hourly",
                     "area": bbox,
+                    "format": "netcdf"
                 },
                 out_path,
             )
@@ -313,7 +314,7 @@ class ERA5DailySource:
         import xarray as xr
         import rioxarray  # noqa: F401
 
-        ds = xr.open_dataset(nc_path, engine="cfgrib")
+        ds = xr.open_dataset(nc_path)
         da = ds[nc_var]
 
         # ERA5 uses latitude/longitude; rename for rioxarray
