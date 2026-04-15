@@ -10,4 +10,5 @@ urlpatterns = [
     path("api/v1/", include("apps.layers.urls")),
     path("api/v1/", include("apps.workflows.urls")),
     path("api/v1/", include("apps.mining.urls")),
+    path("api/v1/", include("apps.stats.urls")),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

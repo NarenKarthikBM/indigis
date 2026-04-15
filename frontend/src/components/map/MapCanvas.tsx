@@ -7,6 +7,7 @@ import OverlayTileLayer from "./OverlayTileLayer";
 import Legend from "./Legend";
 import RegionPopup from "./RegionPopup";
 import BasemapSwitcher from "./BasemapSwitcher";
+import StatsPanel from "./StatsPanel";
 
 function BoundaryToggleButton() {
   const { boundariesVisible, toggleBoundaries } = useStore((s) => ({
@@ -106,6 +107,7 @@ export default function MapCanvas() {
     </MapContainer>
     <BasemapSwitcher />
     <BoundaryToggleButton />
+    <StatsPanel />
     </div>
   );
 }

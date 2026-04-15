@@ -35,7 +35,7 @@ export default function Legend() {
     <div
       style={{
         position: "absolute",
-        bottom: "32px",
+        bottom: "5rem",
         right: "12px",
         zIndex: 1000,
         background: "rgba(21, 29, 43, 0.92)",

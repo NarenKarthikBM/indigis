@@ -16,6 +16,7 @@ const GENERIC_NODE_TYPES = [
   "cigreen", "cired", "ndre",
   "osavi", "tsavi",
   "vari", "avi", "arvi",
+  "ndbi", "utfvi", "uhi",
   "ndti", "wri", "ui", "nbr2", "bai", "csi", "s3",
   "hot", "shadow_index",
   // Arithmetic operators

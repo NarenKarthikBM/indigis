@@ -47,6 +47,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         from apps.layers.models import Layer, RasterAsset
+        from apps.stats.models import RasterStateStats, RasterDistrictStats
 
         slugs = options["slugs"]
         delete_files = options["delete_files"]
@@ -65,9 +66,16 @@ class Command(BaseCommand):
         assets_qs = RasterAsset.objects.filter(layer__in=layers_qs)
         asset_count = assets_qs.count()
 
+        # Collect all raster statistics that would be deleted
+        state_asset_stats_qs = RasterStateStats.objects.filter(raster_asset__in=assets_qs)
+        district_asset_stats_qs = RasterDistrictStats.objects.filter(raster_asset__in=assets_qs)
+        asset_stats_count = state_asset_stats_qs.count() + district_asset_stats_qs.count()
+
+
         self.stdout.write(
             f"{'[DRY RUN] ' if dry_run else ''}"
-            f"Found {layer_count} layer(s) with {asset_count} raster asset(s)."
+            f"Found {layer_count} layer(s) with {asset_count} raster asset(s). "
+            f"Also found {asset_stats_count} statistic record(s)."
         )
 
         if delete_files:
@@ -95,6 +103,11 @@ class Command(BaseCommand):
             self.stdout.write(
                 self.style.SUCCESS(
                     f"Deleted {layer_count} layer(s) and {asset_count} raster asset(s)."
+                )
+            )
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f"Also deleted {asset_stats_count} statistic record(s)."
                 )
             )
         else:
