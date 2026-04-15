@@ -22,6 +22,10 @@ function StatsPlot({ s }: StatsPlotProps) {
   const { min, max, p25, p75, median, mean, std, p95 } = s;
   if (min == null || max == null || min === max) return null;
 
+  // Capture narrowed values so inner functions retain the `number` type.
+  const minVal = min;
+  const maxVal = max;
+
   const W = 272;
   const H = 88;
   const padL = 8;
@@ -32,16 +36,16 @@ function StatsPlot({ s }: StatsPlotProps) {
   const labelY = H - 6; // y for axis labels
 
   function x(v: number): number {
-    return padL + ((v - min) / (max - min)) * plotW;
+    return padL + ((v - minVal) / (maxVal - minVal)) * plotW;
   }
   function clamp(v: number): number {
-    return Math.min(max, Math.max(min, v));
+    return Math.min(maxVal, Math.max(minVal, v));
   }
 
   // ── build elements ────────────────────────────────────────────────────────
 
-  const xMin = x(min);
-  const xMax = x(max);
+  const xMin = x(minVal);
+  const xMax = x(maxVal);
 
   // Std-dev band around mean
   const stdBand =
@@ -65,21 +69,21 @@ function StatsPlot({ s }: StatsPlotProps) {
   // ── axis labels (only non-overlapping ones) ───────────────────────────────
   // Build list and suppress labels that are within 20px of a prior one
   const rawLabels: { v: number; text: string }[] = [
-    { v: min, text: fmt(min) },
+    { v: minVal, text: fmt(minVal) },
     ...(p25 != null ? [{ v: p25, text: fmt(p25) }] : []),
     ...(median != null ? [{ v: median, text: fmt(median) }] : []),
     ...(mean != null ? [{ v: mean, text: fmt(mean) }] : []),
     ...(p75 != null ? [{ v: p75, text: fmt(p75) }] : []),
     ...(p95 != null ? [{ v: p95, text: fmt(p95) }] : []),
-    { v: max, text: fmt(max) },
+    { v: maxVal, text: fmt(maxVal) },
   ].sort((a, b) => a.v - b.v);
 
-  const labels: { xPos: number; text: string; anchor: string }[] = [];
+  const labels: { xPos: number; text: string; anchor: "start" | "middle" | "end" }[] = [];
   let prevX = -Infinity;
   for (const lb of rawLabels) {
     const xPos = x(lb.v);
     if (xPos - prevX < 28) continue;
-    const anchor =
+    const anchor: "start" | "middle" | "end" =
       xPos < padL + 30 ? "start" : xPos > W - padR - 30 ? "end" : "middle";
     labels.push({ xPos, text: lb.text, anchor });
     prevX = xPos;
