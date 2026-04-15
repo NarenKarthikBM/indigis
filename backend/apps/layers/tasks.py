@@ -198,6 +198,8 @@ def process_netcdf_variable(self, task_id: str):
                 except Exception:
                     pass
 
+            # Stagger stats tasks by 90 s each so multiple timesteps don't
+            # saturate CPU/EBS when they all land in the queue at once.
             services.create_raster_asset_and_queue_stats(
                 layer=layer,
                 cog_url=f"/data/cogs/{asset_slug}.tif",
@@ -205,6 +207,7 @@ def process_netcdf_variable(self, task_id: str):
                 data_period_start=period_date,
                 data_period_end=period_date,
                 source=RasterAsset.SOURCE_USER,
+                countdown=i * 90,
             )
 
             scaled_progress = 40 + int(((i + 1) / total) * 50)

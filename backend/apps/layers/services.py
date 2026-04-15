@@ -228,13 +228,19 @@ def extract_nc_variable_to_tiffs(nc_path: str, variable: str, out_dir: str) -> l
     return results
 
 
-def create_raster_asset_and_queue_stats(**kwargs):
-    """Create a RasterAsset and enqueue zonal stats computation."""
+def create_raster_asset_and_queue_stats(countdown: int = 0, **kwargs):
+    """Create a RasterAsset and enqueue zonal stats computation.
+
+    Args:
+        countdown: Seconds to delay before the stats task starts. Use this when
+            creating many assets in a loop (e.g. NetCDF timesteps) to stagger
+            execution and avoid CPU/I-O saturation.
+    """
     from .models import RasterAsset
     from apps.stats.tasks import compute_raster_zonal_stats
 
     asset = RasterAsset.objects.create(**kwargs)
-    compute_raster_zonal_stats.delay(asset.pk)
+    compute_raster_zonal_stats.apply_async(args=[asset.pk], countdown=countdown)
     return asset
 
 
