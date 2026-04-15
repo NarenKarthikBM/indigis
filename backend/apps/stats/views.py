@@ -25,6 +25,7 @@ def _build_stats_payload(stats_obj, asset, available_periods):
         "min": stats_obj.min,
         "max": stats_obj.max,
         "std": stats_obj.std,
+        "variance": stats_obj.variance,
         "median": stats_obj.median,
         "p25": stats_obj.p25,
         "p75": stats_obj.p75,

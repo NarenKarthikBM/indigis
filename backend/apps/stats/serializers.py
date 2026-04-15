@@ -10,6 +10,7 @@ class RegionStatsSerializer(serializers.Serializer):
     min = serializers.FloatField(allow_null=True)
     max = serializers.FloatField(allow_null=True)
     std = serializers.FloatField(allow_null=True)
+    variance = serializers.FloatField(allow_null=True)
     median = serializers.FloatField(allow_null=True)
     p25 = serializers.FloatField(allow_null=True)
     p75 = serializers.FloatField(allow_null=True)

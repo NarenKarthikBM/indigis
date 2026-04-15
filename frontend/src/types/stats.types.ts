@@ -7,6 +7,7 @@ export interface RegionStatsResponse {
   min: number | null;
   max: number | null;
   std: number | null;
+  variance: number | null;
   median: number | null;
   p25: number | null;
   p75: number | null;
