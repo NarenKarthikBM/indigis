@@ -1,6 +1,6 @@
-# IndiGIS — India Geospatial Portal
+# IndiGIS - India Geospatial Portal
 
-A web-based geospatial portal for India with dark-themed UI, PostGIS backend, and TiTiler raster tile serving.
+A web-based geospatial portal for India with dark-themed UI, PostGIS backend and TiTiler raster tile serving.
 
 ## Quick Start
 
