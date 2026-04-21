@@ -25,6 +25,10 @@
   box-sizing: border-box;
 }
 
+html {
+  font-size: 130%;
+}
+
 html,
 body,
 #root {

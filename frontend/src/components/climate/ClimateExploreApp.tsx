@@ -210,7 +210,7 @@ export default function ClimateExploreApp() {
   return (
     <div className="flex flex-row h-screen overflow-hidden bg-slate-950">
       {/* Left Sidebar */}
-      <aside className="w-[260px] shrink-0 h-screen flex flex-col bg-slate-900 border-r border-slate-800 overflow-hidden">
+      <aside className="w-[318px] shrink-0 h-screen flex flex-col bg-slate-900 border-r border-slate-800 overflow-hidden">
 
         {/* App header */}
         <div className="px-4 pt-3 pb-2.5 border-b border-slate-800 shrink-0">
@@ -371,7 +371,7 @@ export default function ClimateExploreApp() {
       </main>
 
       {/* Right Panel */}
-      <aside className="w-[460px] shrink-0 h-screen flex flex-col bg-slate-900 border-l border-slate-800 overflow-hidden">
+      <aside className="w-[540px] shrink-0 h-screen flex flex-col bg-slate-900 border-l border-slate-800 overflow-hidden">
         {selectedDistrictCode ? <DistrictDetailPanel /> : <RankingsPanel />}
       </aside>
     </div>
