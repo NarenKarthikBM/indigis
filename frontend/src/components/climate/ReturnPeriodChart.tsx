@@ -53,46 +53,59 @@ export default function ReturnPeriodChart({
 
   if (!gevPoints.length) {
     return (
-      <div className="flex items-center justify-center h-40 text-gray-400 text-sm">
+      <div className="flex items-center justify-center h-40 text-slate-500 text-sm">
         No return period data available
       </div>
     );
   }
 
+  const tooltipStyle = {
+    backgroundColor: "#1e293b",
+    border: "1px solid #334155",
+    borderRadius: 6,
+    color: "#cbd5e1",
+    fontSize: 11,
+  };
+
   return (
-    <ResponsiveContainer width="100%" height={180}>
-      <ComposedChart margin={{ top: 4, right: 8, left: 0, bottom: 4 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+    <ResponsiveContainer width="100%" height="100%">
+      <ComposedChart margin={{ top: 4, right: 8, left: 0, bottom: 16 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
         <XAxis
           dataKey="rp"
           type="number"
           scale="log"
           domain={[1, maxRp * 1.2]}
-          tick={{ fontSize: 10 }}
-          label={{ value: "Return Period (years)", position: "insideBottom", fontSize: 10, dy: 12 }}
+          tick={{ fontSize: 10, fill: "#64748b" }}
+          axisLine={{ stroke: "#1e293b" }}
+          tickLine={{ stroke: "#1e293b" }}
+          label={{ value: "Return Period (years)", position: "insideBottom", fontSize: 10, dy: 12, fill: "#64748b" }}
           tickFormatter={(v) => `${v}`}
         />
         <YAxis
-          tick={{ fontSize: 10 }}
-          label={{ value: units, angle: -90, position: "insideLeft", fontSize: 10, dy: 30 }}
+          tick={{ fontSize: 10, fill: "#64748b" }}
+          axisLine={{ stroke: "#1e293b" }}
+          tickLine={{ stroke: "#1e293b" }}
+          label={{ value: units, angle: -90, position: "insideLeft", fontSize: 10, dy: 30, fill: "#64748b" }}
         />
         <Tooltip
+          contentStyle={tooltipStyle}
           formatter={(v: number) => [v.toFixed(2), indexName]}
           labelFormatter={(l) => `RP: ${Number(l).toFixed(1)} yr`}
         />
         <Scatter
           name="Empirical"
           data={empiricalPoints}
-          fill="#93c5fd"
-          opacity={0.7}
+          fill="#60a5fa"
+          opacity={0.6}
           r={3}
         />
         <Line
           data={gevPoints}
           type="monotone"
           dataKey="value"
-          stroke="#dc2626"
-          dot={{ r: 4, fill: "#dc2626" }}
+          stroke="#f87171"
+          dot={{ r: 4, fill: "#f87171" }}
           strokeWidth={2}
           name="GEV fit"
         />

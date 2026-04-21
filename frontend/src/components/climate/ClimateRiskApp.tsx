@@ -53,7 +53,7 @@ export default function ClimateRiskApp() {
             </div>
             <span className="font-semibold text-slate-900 tracking-tight text-sm">IndiGIS</span>
             <span className="text-slate-200 select-none">·</span>
-            <span className="text-sm text-slate-400">Climate Risk Engine</span>
+            <span className="text-sm text-slate-400">Heat Extreme Risk Engine</span>
           </div>
           <div className="flex items-center gap-1.5">
             <Link

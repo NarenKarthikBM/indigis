@@ -4,30 +4,26 @@ import type { ETCCDIIndexName } from "../../types/climate.types";
 const TIER1: ETCCDIIndexName[] = ["TXx", "TNn", "TNx", "TXn"];
 const TIER2: ETCCDIIndexName[] = ["TX90p", "TN10p", "WSDI", "CSDI"];
 
-const LABELS: Record<ETCCDIIndexName, string> = {
-  TXx: "TXx",
-  TNn: "TNn",
-  TNx: "TNx",
-  TXn: "TXn",
-  // SU25: "SU25",
-  // TR20: "TR20",
-  TX90p: "TX90p",
-  TN10p: "TN10p",
-  WSDI: "WSDI",
-  CSDI: "CSDI",
+const FULL_NAMES: Record<ETCCDIIndexName, string> = {
+  TXx:   "Max of Daily Max Temp",
+  TNn:   "Min of Daily Min Temp",
+  TNx:   "Max of Daily Min Temp",
+  TXn:   "Min of Daily Max Temp",
+  TX90p: "Warm Days (% > 90th pct)",
+  TN10p: "Cool Nights (% < 10th pct)",
+  WSDI:  "Warm Spell Duration Index",
+  CSDI:  "Cold Spell Duration Index",
 };
 
-const DESCRIPTIONS: Partial<Record<ETCCDIIndexName, string>> = {
-  TXx: "Max Tmax",
-  TNn: "Min Tmin",
-  TNx: "Max Tmin",
-  TXn: "Min Tmax",
-  // SU25: "Summer Days",
-  // TR20: "Tropical Nights",
-  TX90p: "Warm Days %",
-  TN10p: "Cool Nights %",
-  WSDI: "Warm Spell",
-  CSDI: "Cold Spell",
+export const CATEGORY: Record<ETCCDIIndexName, "warm" | "cold"> = {
+  TXx:   "warm",
+  TNn:   "cold",
+  TNx:   "warm",
+  TXn:   "cold",
+  TX90p: "warm",
+  TN10p: "cold",
+  WSDI:  "warm",
+  CSDI:  "cold",
 };
 
 export default function IndexSelector() {
@@ -41,21 +37,46 @@ export default function IndexSelector() {
   const renderPill = (name: ETCCDIIndexName) => {
     const active = selectedIndex === name;
     const available = isAvailable(name);
+    const isWarm = CATEGORY[name] === "warm";
+
     return (
       <button
         key={name}
-        title={DESCRIPTIONS[name]}
+        title={FULL_NAMES[name]}
         onClick={() => available && setSelectedIndex(name)}
         className={[
-          "w-full px-2 py-1.5 rounded-lg text-xs border transition-all",
+          "w-full px-2.5 py-2 rounded-lg border transition-all text-left",
           active
-            ? "font-semibold bg-blue-600 text-white border-blue-600 shadow-sm ring-1 ring-blue-300"
+            ? "bg-blue-600 border-blue-700 shadow-sm ring-1 ring-blue-800"
             : available
-            ? "font-medium bg-white text-slate-700 border-slate-200 hover:border-blue-300 hover:bg-blue-50"
-            : "font-medium bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed",
+            ? "bg-slate-800 border-slate-700 hover:border-blue-500 hover:bg-slate-750"
+            : "bg-slate-900 border-slate-800 cursor-not-allowed opacity-40",
         ].join(" ")}
       >
-        {LABELS[name]}
+        <div className="flex items-center gap-1.5 mb-0.5">
+          <span
+            className={[
+              "w-1.5 h-1.5 rounded-full shrink-0",
+              isWarm ? "bg-orange-400" : "bg-sky-400",
+            ].join(" ")}
+          />
+          <span
+            className={[
+              "font-mono text-xs font-bold",
+              active ? "text-white" : available ? "text-slate-200" : "text-slate-600",
+            ].join(" ")}
+          >
+            {name}
+          </span>
+        </div>
+        {/* <p
+          className={[
+            "text-[10px] leading-snug pl-3",
+            active ? "text-blue-200" : available ? "text-slate-500" : "text-slate-700",
+          ].join(" ")}
+        >
+          {FULL_NAMES[name]}
+        </p> */}
       </button>
     );
   };
@@ -63,11 +84,11 @@ export default function IndexSelector() {
   return (
     <div className="space-y-3">
       <div>
-        <p className="text-[9px] text-slate-400 uppercase tracking-widest mb-1.5">Core</p>
+        <p className="text-[9px] text-slate-600 uppercase tracking-widest mb-1.5">Core</p>
         <div className="grid grid-cols-2 gap-1">{TIER1.map(renderPill)}</div>
       </div>
       <div>
-        <p className="text-[9px] text-slate-400 uppercase tracking-widest mb-1.5">
+        <p className="text-[9px] text-slate-600 uppercase tracking-widest mb-1.5">
           Baseline-dependent
         </p>
         <div className="grid grid-cols-2 gap-1">{TIER2.map(renderPill)}</div>
