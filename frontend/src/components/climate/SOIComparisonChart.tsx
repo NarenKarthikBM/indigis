@@ -82,6 +82,37 @@ const DMI_ANNUAL: Record<number, number> = {
   2023: 0.20, 2024: 0.10, 2025: 0.05,
 };
 
+const DMI_SEASONAL: Record<string, Record<number, number>> = {
+      DJF: {
+          1990: -0.185, 1991: -0.010, 1992: -0.209, 1993: -0.159, 1994: -0.109, 1995: 0.189, 1996: 0.012, 1997: -0.148,
+          1998: 0.603, 1999: -0.168, 2000: -0.094, 2001: -0.232, 2002: -0.097, 2003: -0.127, 2004: 0.116, 2005: -0.272,
+          2006: -0.247, 2007: 0.182, 2008: -0.061, 2009: 0.047, 2010: 0.159, 2011: 0.074, 2012: -0.053, 2013: 0.131,
+          2014: -0.016, 2015: -0.133, 2016: 0.143, 2017: -0.098, 2018: 0.041, 2019: 0.371, 2020: 0.157, 2021: 0.108,
+          2022: -0.086, 2023: 0.058, 2024: 0.648
+      },
+      MAM: {
+          1990: -0.292, 1991: 0.210, 1992: -0.591, 1993: -0.168, 1994: 0.366, 1995: -0.174, 1996: -0.240, 1997: 0.041,
+          1998: 0.044, 1999: -0.029, 2000: 0.131, 2001: 0.088, 2002: -0.224, 2003: -0.101, 2004: -0.189, 2005: -0.127,
+          2006: -0.149, 2007: 0.162, 2008: 0.041, 2009: 0.161, 2010: 0.266, 2011: 0.144, 2012: -0.205, 2013: -0.240,
+          2014: -0.100, 2015: -0.003, 2016: 0.008, 2017: 0.464, 2018: -0.027, 2019: 0.340, 2020: 0.102, 2021: 0.175,
+          2022: -0.094, 2023: 0.473, 2024: 0.386
+      },
+      JJA: {
+          1990: -0.402, 1991: 0.197, 1992: -0.703, 1993: -0.188, 1994: 0.600, 1995: -0.130, 1996: -0.573, 1997: 0.388,
+          1998: -0.273, 1999: -0.003, 2000: 0.062, 2001: -0.105, 2002: -0.219, 2003: 0.126, 2004: -0.272, 2005: -0.302,
+          2006: 0.070, 2007: 0.104, 2008: 0.195, 2009: -0.065, 2010: -0.068, 2011: 0.207, 2012: 0.400, 2013: -0.290,
+          2014: -0.254, 2015: 0.363, 2016: -0.548, 2017: 0.431, 2018: 0.110, 2019: 0.546, 2020: 0.197, 2021: -0.110,
+          2022: -0.259, 2023: 0.663, 2024: 0.166
+      },
+      SON: {
+          1990: -0.207, 1991: 0.036, 1992: -0.620, 1993: -0.158, 1994: 0.508, 1995: -0.280, 1996: -0.872, 1997: 0.974,
+          1998: -0.631, 1999: -0.119, 2000: -0.181, 2001: -0.306, 2002: 0.262, 2003: -0.154, 2004: -0.088, 2005: -0.414,
+          2006: 0.502, 2007: 0.093, 2008: -0.004, 2009: -0.061, 2010: -0.400, 2011: 0.298, 2012: 0.154, 2013: -0.093,
+          2014: 0.002, 2015: 0.375, 2016: -0.397, 2017: 0.113, 2018: 0.596, 2019: 0.897, 2020: -0.032, 2021: -0.027,
+          2022: -0.427, 2023: 0.890, 2024: -0.155
+      }
+};
+
 type Season = "DJF" | "MAM" | "JJA" | "SON";
 const SEASONS: Season[] = ["DJF", "MAM", "JJA", "SON"];
 
@@ -274,8 +305,9 @@ export default function SOIComparisonChart({ data, trend, units, indexName }: Pr
   const { norm: normSoi } = soiRaw.length > 1 ? normalizer(soiRaw) : { norm: () => 0 };
 
   // DMI source
+  const dmiSource = DMI_SEASONAL[season] ?? {};
   const dmiRaw = validData
-    .map((d) => DMI_ANNUAL[d.year])
+    .map((d) => dmiSource[d.year] ?? DMI_ANNUAL[d.year])
     .filter((v): v is number => v != null);
   const { norm: normDmi } = dmiRaw.length > 1 ? normalizer(dmiRaw) : { norm: () => 0 };
 
@@ -381,11 +413,29 @@ export default function SOIComparisonChart({ data, trend, units, indexName }: Pr
 
       {/* ── IOD panel ─────────────────────────────── */}
       <div className="flex flex-col flex-1 min-h-0">
-        <div className="flex items-center gap-1.5 mb-1.5 shrink-0">
-          <span className="w-2 h-2 rounded-full bg-teal-500 shrink-0" />
-          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
-            vs IOD / DMI · Annual
-          </span>
+        <div className="flex items-center justify-between gap-1.5 mb-1.5 shrink-0">
+          <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-teal-500 shrink-0 " />
+            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+              vs IOD / DMI · Annual
+            </span>
+          </div>
+          <div className="flex items-center gap-1">
+            {SEASONS.map((s) => (
+              <button
+                key={s}
+                onClick={() => setSeason(s)}
+                className={[
+                  "text-[10px] px-1.5 py-0.5 rounded border transition-colors",
+                  season === s
+                    ? "bg-violet-700 text-white border-violet-700"
+                    : "text-slate-500 border-slate-700 hover:border-slate-500 hover:text-slate-300",
+                ].join(" ")}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
         </div>
         <div className="flex-1 min-h-0">
           <SubChart
