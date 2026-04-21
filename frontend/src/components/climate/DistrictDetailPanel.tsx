@@ -47,7 +47,7 @@ export default function DistrictDetailPanel() {
   const district = districtProfile?.district;
 
   const hasCorrData = CORR_SEASONS.some(
-    (s) => !!(indexProfile?.correlations?.[corrKey(s)])
+    (s) => !!(indexProfile?.correlations?.[corrKey("SOI", s)])
   );
 
   return (
@@ -211,7 +211,7 @@ export default function DistrictDetailPanel() {
                 {/* Season selector */}
                 <div className="flex gap-1 p-0.5 bg-slate-100 rounded-lg">
                   {CORR_SEASONS.map((s) => {
-                    const hasData = !!(indexProfile.correlations?.[corrKey(s)]);
+                    const hasData = !!(indexProfile.correlations?.[corrKey("SOI", s)]);
                     const active = corrSeason === s;
                     return (
                       <button
@@ -236,7 +236,7 @@ export default function DistrictDetailPanel() {
               {/* Correlation display */}
               <div className="px-4 py-4">
                 {(() => {
-                  const info = indexProfile.correlations?.[corrKey(corrSeason)];
+                  const info = indexProfile.correlations?.[corrKey("SOI", corrSeason)];
                   if (!info) {
                     return (
                       <p className="text-xs text-slate-400 text-center py-3">
