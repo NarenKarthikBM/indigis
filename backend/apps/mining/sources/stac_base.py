@@ -9,13 +9,13 @@ All new STAC-backed sources inherit from STACSource, which provides:
   - best-item selection by cloud cover (optical sources)
   - COG conversion (deflate, 512×512 tiles)
 
-WorldCoverSource is NOT refactored to use this base — it already works.
+WorldCoverSource is NOT refactored to use this base - it already works.
 
 Projection note
 ---------------
 STAC imagery has heterogeneous CRS:
-  WGS-84 (EPSG:4326) — CopDEM GLO-30, WorldCover
-  UTM (various zones)  — Sentinel-2 L2A, Landsat C2 L2, Sentinel-1 RTC
+  WGS-84 (EPSG:4326) - CopDEM GLO-30, WorldCover
+  UTM (various zones)  - Sentinel-2 L2A, Landsat C2 L2, Sentinel-1 RTC
 
 The user-supplied bbox is always in WGS-84.  ``_window_to_cog`` and
 ``_mosaic_to_cog`` both transform the bbox into the native CRS before
@@ -53,7 +53,7 @@ class STACSource(BaseMiningSource, ABC):
     collection: str = ""
     asset_key: str = ""
 
-    DEFAULT_BBOX = (68.0, 8.0, 97.5, 37.5)  # west, south, east, north — India
+    DEFAULT_BBOX = (68.0, 8.0, 97.5, 37.5)  # west, south, east, north - India
 
     def __init__(self, datasource_slug: str):
         self.source_slug = datasource_slug
@@ -125,14 +125,14 @@ class STACSource(BaseMiningSource, ABC):
                 src_profile = datasets[0].profile.copy()
 
                 if src_crs.is_geographic:
-                    # Already WGS-84 — pass bbox directly
+                    # Already WGS-84 - pass bbox directly
                     merge_bounds = (west, south, east, north)
                     merged, merge_transform = rasterio_merge(datasets, bounds=merge_bounds)
                     dst_crs = src_crs
                     dst_transform = merge_transform
                     dst_data = merged
                 else:
-                    # Projected (e.g. UTM) — transform bbox to source CRS for merge
+                    # Projected (e.g. UTM) - transform bbox to source CRS for merge
                     src_west, src_south, src_east, src_north = transform_bounds(
                         WGS84, src_crs, west, south, east, north
                     )
@@ -216,7 +216,7 @@ class STACSource(BaseMiningSource, ABC):
                     data = src.read(window=window)
                     if data.shape[1] == 0 or data.shape[2] == 0:
                         raise RuntimeError(
-                            f"Empty window for WGS-84 bbox {bbox} — "
+                            f"Empty window for WGS-84 bbox {bbox} - "
                             f"scene bounds are {src.bounds}"
                         )
                     win_transform = rasterio.windows.transform(window, src.transform)
@@ -254,7 +254,7 @@ class STACSource(BaseMiningSource, ABC):
                         raise RuntimeError(
                             f"Empty window for bbox {bbox} in source CRS {src_crs} "
                             f"(transformed: {src_west:.1f},{src_south:.1f},"
-                            f"{src_east:.1f},{src_north:.1f}) — "
+                            f"{src_east:.1f},{src_north:.1f}) - "
                             f"scene bounds are {src.bounds}"
                         )
                     win_transform = rasterio.windows.transform(window, src.transform)

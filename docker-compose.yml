@@ -23,6 +23,7 @@ services:
     volumes:
       - ./backend:/app
       - cog-data:/cogs
+      - era5-nc:/data/era5_nc
     ports:
       - "8000:8000"
     environment:
@@ -72,10 +73,11 @@ services:
 
   celery:
     build: ./backend
-    command: celery -A config worker -l info -Q mining,processing,exports,stats,uploads
+    command: celery -A config worker -l info -Q mining,processing,exports,stats,uploads,climate
     volumes:
       - ./backend:/app
       - cog-data:/cogs
+      - era5-nc:/data/era5_nc
     environment:
       - DJANGO_SETTINGS_MODULE=config.settings.dev
       - DATABASE_URL=postgis://${DB_USER:-indigis}:${DB_PASSWORD:-indigis}@db:5432/${DB_NAME:-indigis}
@@ -110,3 +112,4 @@ services:
 volumes:
   pgdata:
   cog-data:
+  era5-nc:

@@ -560,7 +560,7 @@ def difference_node(inputs: dict, config: dict) -> dict:
     return {"type": "raster", "path": _write_raster(np.ma.filled(a - b, _NODATA), p, "_diff.tif"), "metadata": {}}
 
 
-## SPECTRAL INDICES – Vegetation
+## SPECTRAL INDICES - Vegetation
 
 def ndvi_node(inputs: dict, config: dict) -> dict:
     raster_in = inputs.get("raster_in")
@@ -763,7 +763,7 @@ def arvi_node(inputs: dict, config: dict) -> dict:
     return {"type": "raster", "path": path, "metadata": {}}
 
 
-## SPECTRAL INDICES – Chlorophyll
+## SPECTRAL INDICES - Chlorophyll
 
 def cigreen_node(inputs: dict, config: dict) -> dict:
     raster_in = inputs.get("raster_in")
@@ -815,7 +815,7 @@ def ndre_node(inputs: dict, config: dict) -> dict:
     return {"type": "raster", "path": path, "metadata": {}}
 
 
-## SPECTRAL INDICES – Soil adjusted
+## SPECTRAL INDICES - Soil adjusted
 
 def osavi_node(inputs: dict, config: dict) -> dict:
     raster_in = inputs.get("raster_in")
@@ -856,7 +856,7 @@ def tsavi_node(inputs: dict, config: dict) -> dict:
     return {"type": "raster", "path": path, "metadata": {}}
 
 
-## SPECTRAL INDICES – Moisture / Water
+## SPECTRAL INDICES - Moisture / Water
 
 def ndmi_node(inputs: dict, config: dict) -> dict:
     raster_in = inputs.get("raster_in")
@@ -944,7 +944,7 @@ def s3_node(inputs: dict, config: dict) -> dict:
     return {"type": "raster", "path": path, "metadata": {}}
 
 
-## SPECTRAL INDICES – Urban Heat Island / Built-up
+## SPECTRAL INDICES - Urban Heat Island / Built-up
 
 def ndbi_node(inputs: dict, config: dict) -> dict:
     raster_in = inputs.get("raster_in")
@@ -1010,7 +1010,7 @@ def ui_node(inputs: dict, config: dict) -> dict:
     return {"type": "raster", "path": path, "metadata": {}}
 
 
-## SPECTRAL INDICES – Burn / Fire
+## SPECTRAL INDICES - Burn / Fire
 
 def nbr_node(inputs: dict, config: dict) -> dict:
     raster_in = inputs.get("raster_in")
@@ -1078,7 +1078,7 @@ def csi_node(inputs: dict, config: dict) -> dict:
     return {"type": "raster", "path": path, "metadata": {}}
 
 
-## SPECTRAL INDICES – Soil / Bare
+## SPECTRAL INDICES - Soil / Bare
 
 def bsi_node(inputs: dict, config: dict) -> dict:
     raster_in = inputs.get("raster_in")
@@ -1107,7 +1107,7 @@ def bsi_node(inputs: dict, config: dict) -> dict:
     return {"type": "raster", "path": path, "metadata": {}}
 
 
-## SPECTRAL INDICES – Snow
+## SPECTRAL INDICES - Snow
 
 def ndsi_node(inputs: dict, config: dict) -> dict:
     raster_in = inputs.get("raster_in")
@@ -1124,7 +1124,7 @@ def ndsi_node(inputs: dict, config: dict) -> dict:
     return {"type": "raster", "path": path, "metadata": {}}
 
 
-## SPECTRAL INDICES – Turbidity / Sediment
+## SPECTRAL INDICES - Turbidity / Sediment
 
 def ndti_node(inputs: dict, config: dict) -> dict:
     raster_in = inputs.get("raster_in")
@@ -1140,7 +1140,7 @@ def ndti_node(inputs: dict, config: dict) -> dict:
     return {"type": "raster", "path": path, "metadata": {}}
 
 
-## SPECTRAL INDICES – Atmospheric
+## SPECTRAL INDICES - Atmospheric
 
 def hot_node(inputs: dict, config: dict) -> dict:
     raster_in = inputs.get("raster_in")
@@ -1445,7 +1445,7 @@ def ahp_node(inputs: dict, config: dict) -> dict:
         metadata["consistency_ratio"] = round(cr, 4)
         if cr > 0.1:
             metadata["warning"] = (
-                f"Consistency Ratio ({cr:.4f}) exceeds 0.1 — "
+                f"Consistency Ratio ({cr:.4f}) exceeds 0.1 - "
                 "consider revising pairwise comparisons"
             )
 

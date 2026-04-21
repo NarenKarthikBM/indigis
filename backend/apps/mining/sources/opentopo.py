@@ -5,12 +5,12 @@ Each DEM type becomes its own DataSource record (slug: opentopo-<demtype-lower>)
 The DataSource.config dict must contain:
 
     {
-        "demtype":  "SRTMGL1",   # required — one of DEM_TYPES
-        "south":    23.0,        # required — bounding box in WGS84 decimal degrees
+        "demtype":  "SRTMGL1",   # required - one of DEM_TYPES
+        "south":    23.0,        # required - bounding box in WGS84 decimal degrees
         "north":    23.5,
         "west":     77.0,
         "east":     77.5,
-        "api_key":  "..."        # optional — falls back to settings.OPENTOPO_API_KEY
+        "api_key":  "..."        # optional - falls back to settings.OPENTOPO_API_KEY
     }
 
 Note on bbox size: high-resolution products (SRTMGL1, COP30, AW3D30) produce very
@@ -67,7 +67,7 @@ class OpenTopoSource(BaseMiningSource):
         self.source_slug = datasource_slug
 
     # ------------------------------------------------------------------
-    # Period logic — DEMs are (mostly) static; re-fetch once a year
+    # Period logic - DEMs are (mostly) static; re-fetch once a year
     # ------------------------------------------------------------------
 
     def get_periods_to_fetch(self) -> list[tuple[date, date]]:
@@ -84,11 +84,11 @@ class OpenTopoSource(BaseMiningSource):
             days_since = (today - last_done.completed_at.date()).days
             if days_since < 365:
                 logger.info(
-                    "%s: last successful fetch was %d days ago — skipping.", self.source_slug, days_since
+                    "%s: last successful fetch was %d days ago - skipping.", self.source_slug, days_since
                 )
                 return []
 
-        # Use today as a single-day "period" — DEMs have no meaningful time range
+        # Use today as a single-day "period" - DEMs have no meaningful time range
         return [(today, today)]
 
     # ------------------------------------------------------------------

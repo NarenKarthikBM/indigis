@@ -184,7 +184,7 @@ def extract_nc_variable_to_tiffs(nc_path: str, variable: str, out_dir: str) -> l
     Returns a list of dicts: [{path, period_label, time}, ...]
     """
     import xarray as xr
-    import rioxarray  # noqa: F401 — registers .rio accessor
+    import rioxarray  # noqa: F401 - registers .rio accessor
 
     ds = xr.open_dataset(nc_path)
     os.makedirs(out_dir, exist_ok=True)

@@ -8,7 +8,7 @@ is older than 365 days (same strategy as OpenTopoSource).
 
 DataSource config (optional):
     {
-        "bbox": [68.0, 8.0, 97.5, 37.5]   # west, south, east, north — defaults to India
+        "bbox": [68.0, 8.0, 97.5, 37.5]   # west, south, east, north - defaults to India
     }
 """
 
@@ -27,7 +27,7 @@ class CopDEMSource(STACSource):
     asset_key = "data"
 
     # ------------------------------------------------------------------
-    # Period logic — static DEM, re-fetch once a year at most
+    # Period logic - static DEM, re-fetch once a year at most
     # ------------------------------------------------------------------
 
     def get_periods_to_fetch(self) -> list[tuple[date, date]]:
@@ -44,7 +44,7 @@ class CopDEMSource(STACSource):
             days_since = (today - last_done.completed_at.date()).days
             if days_since < 365:
                 logger.info(
-                    "%s: last successful fetch was %d days ago — skipping.",
+                    "%s: last successful fetch was %d days ago - skipping.",
                     self.source_slug,
                     days_since,
                 )
@@ -60,7 +60,7 @@ class CopDEMSource(STACSource):
         bbox = self._bbox()
         logger.info("CopDEMSource: searching STAC for tiles in bbox %s", bbox)
 
-        # CopDEM is a static dataset — no datetime filter needed
+        # CopDEM is a static dataset - no datetime filter needed
         items = self._search(bbox)
         if not items:
             raise RuntimeError(f"No CopDEM STAC items found in bbox {bbox}")
@@ -70,7 +70,7 @@ class CopDEMSource(STACSource):
         hrefs = []
         for item in items:
             if self.asset_key not in item.assets:
-                logger.warning("Item %s has no '%s' asset — skipping.", item.id, self.asset_key)
+                logger.warning("Item %s has no '%s' asset - skipping.", item.id, self.asset_key)
                 continue
             hrefs.append(item.assets[self.asset_key].href)
 

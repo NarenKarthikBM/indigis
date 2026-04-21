@@ -38,7 +38,7 @@ def build_titiler_url(cog_url, colormap="viridis", rescale=None, titiler_base=No
         if rescale:
             url += f"&rescale={rescale}&rescale={rescale}&rescale={rescale}"
     else:
-        # Single-band or multi-band shown as colormap — always select band 1
+        # Single-band or multi-band shown as colormap - always select band 1
         # so TiTiler doesn't receive a multi-band source with a colormap applied.
         url += "&bidx=1"
         url += f"&colormap_name={colormap}"
@@ -232,7 +232,7 @@ class RasterUploadView(APIView):
                 if date_end_raw:
                     metadata["date_end"] = date.fromisoformat(date_end_raw)
             except ValueError:
-                pass  # invalid date string — keep whatever was extracted
+                pass  # invalid date string - keep whatever was extracted
 
             # Create Layer and RasterAsset
             layer = Layer.objects.create(

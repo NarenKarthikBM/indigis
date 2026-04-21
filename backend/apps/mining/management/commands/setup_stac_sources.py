@@ -45,7 +45,7 @@ STAC_SOURCES = [
     },
 ]
 
-DEFAULT_BBOX = [77.0, 23.0, 77.5, 23.5]  # small region near Bhopal — safe for dev/test
+DEFAULT_BBOX = [77.0, 23.0, 77.5, 23.5]  # small region near Bhopal - safe for dev/test
 
 
 class Command(BaseCommand):

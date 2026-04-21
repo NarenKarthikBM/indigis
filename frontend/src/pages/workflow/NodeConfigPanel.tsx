@@ -493,7 +493,7 @@ function RasterCalculatorForm({
               }}
             >
               <div style={{ fontSize: 10, color: "#f59e0b", marginBottom: 4 }}>
-                {handle} — {label}
+                {handle} - {label}
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                 {vars.map((v) => (
@@ -566,7 +566,7 @@ function AHPForm({
   if (n < 2) {
     return (
       <div style={{ fontSize: 11, color: "#475569" }}>
-        Connect at least 2 rasters (A–H) to build the comparison matrix.
+        Connect at least 2 rasters (A-H) to build the comparison matrix.
       </div>
     );
   }
@@ -620,7 +620,7 @@ function AHPForm({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <Label>Pairwise Comparison Matrix (1–9)</Label>
+      <Label>Pairwise Comparison Matrix (1-9)</Label>
 
       {/* Header row */}
       <div style={{ overflowX: "auto" }}>
@@ -675,7 +675,7 @@ function AHPForm({
                       </td>
                     );
                   }
-                  // lower triangle — reciprocal
+                  // lower triangle - reciprocal
                   const recip = 1 / getValue(j, i);
                   return (
                     <td key={j} style={{ padding: "2px 1px" }}>
@@ -701,7 +701,7 @@ function AHPForm({
       </div>
 
       <div style={{ fontSize: 10, color: "#475569", lineHeight: 1.4 }}>
-        Enter values 1–9 in the upper triangle.<br />
+        Enter values 1-9 in the upper triangle.<br />
         9 = row criterion extremely more important than column.
       </div>
 
@@ -749,7 +749,7 @@ function AHPForm({
             color: cr > 0.1 ? "#f87171" : "#4ade80",
           }}
         >
-          CR = {cr.toFixed(4)} {cr > 0.1 ? "— Inconsistent (> 0.1)" : "— Acceptable"}
+          CR = {cr.toFixed(4)} {cr > 0.1 ? "- Inconsistent (> 0.1)" : "- Acceptable"}
         </div>
       )}
     </div>

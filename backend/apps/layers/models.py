@@ -105,7 +105,7 @@ class RasterAsset(models.Model):
         ordering = ["-created_at"]
 
     def __str__(self):
-        return f"{self.layer.label} — {self.period_label or self.created_at}"
+        return f"{self.layer.label} - {self.period_label or self.created_at}"
 
 
 class VectorLayer(models.Model):

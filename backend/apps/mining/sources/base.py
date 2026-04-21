@@ -41,11 +41,11 @@ class BaseMiningSource(ABC):
         try:
             ds = DataSource.objects.get(slug=self.source_slug)
         except DataSource.DoesNotExist:
-            logger.warning("DataSource '%s' not found — skipping.", self.source_slug)
+            logger.warning("DataSource '%s' not found - skipping.", self.source_slug)
             return
 
         if not ds.is_active:
-            logger.info("DataSource '%s' is inactive — skipping.", self.source_slug)
+            logger.info("DataSource '%s' is inactive - skipping.", self.source_slug)
             return
 
         periods = self.get_periods_to_fetch()
@@ -64,7 +64,7 @@ class BaseMiningSource(ABC):
                 period_end=period_end,
                 started_at=timezone.now(),
             )
-            logger.info("Job %s started: %s [%s–%s]", job.id, self.source_slug, period_start, period_end)
+            logger.info("Job %s started: %s [%s-%s]", job.id, self.source_slug, period_start, period_end)
 
             try:
                 cog_path = self.fetch(period_start, period_end)

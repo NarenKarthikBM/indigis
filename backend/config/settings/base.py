@@ -33,6 +33,7 @@ LOCAL_APPS = [
     "apps.workflows",
     "apps.mining",
     "apps.stats",
+    "apps.climate",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -146,5 +147,5 @@ CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
 
 UPLOAD_TMP_PATH = os.environ.get("UPLOAD_TMP_PATH", "/cogs/uploads")
 
-# OpenTopography API key — override in .env or per-DataSource config
+# OpenTopography API key - override in .env or per-DataSource config
 OPENTOPO_API_KEY = os.environ.get("OPENTOPO_API_KEY", "")

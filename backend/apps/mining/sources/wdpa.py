@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 class WDPASource(BaseMiningSource):
-    """WDPA protected areas (monthly snapshot). Stub — real HTTP fetch wired later."""
+    """WDPA protected areas (monthly snapshot). Stub - real HTTP fetch wired later."""
 
     source_slug = "wdpa"
 
@@ -34,7 +34,7 @@ class WDPASource(BaseMiningSource):
     def fetch(self, period_start: date, period_end: date) -> str:
         """[STUB] Log and write a placeholder file so the pipeline runs end-to-end."""
         logger.warning(
-            "[STUB] WDPASource.fetch(%s, %s) — placeholder file only; wire real HTTP fetch later.",
+            "[STUB] WDPASource.fetch(%s, %s) - placeholder file only; wire real HTTP fetch later.",
             period_start,
             period_end,
         )

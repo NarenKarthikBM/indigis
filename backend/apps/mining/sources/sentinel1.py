@@ -10,7 +10,7 @@ SAR is cloud-independent so no cloud-cover filtering is applied.
 
 DataSource config (optional):
     {
-        "bbox": [68.0, 8.0, 97.5, 37.5]   # west, south, east, north — defaults to India
+        "bbox": [68.0, 8.0, 97.5, 37.5]   # west, south, east, north - defaults to India
     }
 """
 
@@ -33,7 +33,7 @@ class Sentinel1RTCSource(STACSource):
     asset_key = "vv"
 
     # ------------------------------------------------------------------
-    # Period logic — one period per missing calendar month
+    # Period logic - one period per missing calendar month
     # ------------------------------------------------------------------
 
     def get_periods_to_fetch(self) -> list[tuple[date, date]]:
@@ -78,7 +78,7 @@ class Sentinel1RTCSource(STACSource):
                 f"No Sentinel-1 RTC items found for {period_start.strftime('%Y-%m')} in bbox {bbox}"
             )
 
-        # SAR is cloud-independent — take the first (most-recent) item
+        # SAR is cloud-independent - take the first (most-recent) item
         item = items[0]
         if self.asset_key not in item.assets:
             raise RuntimeError(f"Item {item.id} has no '{self.asset_key}' asset")

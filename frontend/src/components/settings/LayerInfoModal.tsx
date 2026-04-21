@@ -116,7 +116,7 @@ export default function LayerInfoModal() {
           {layer.min_value != null && layer.max_value != null && (
             <MetaRow
               label="Value Range"
-              value={`${layer.min_value} – ${layer.max_value}`}
+              value={`${layer.min_value} - ${layer.max_value}`}
               mono
             />
           )}
@@ -125,7 +125,7 @@ export default function LayerInfoModal() {
               label="Date Range"
               value={
                 layer.date_start && layer.date_end && layer.date_start !== layer.date_end
-                  ? `${layer.date_start} – ${layer.date_end}`
+                  ? `${layer.date_start} - ${layer.date_end}`
                   : (layer.date_start ?? layer.date_end ?? "")
               }
               mono

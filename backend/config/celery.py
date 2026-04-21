@@ -26,14 +26,14 @@ app.conf.beat_schedule = {
         "task": "apps.mining.tasks.cleanup_old_cogs",
         "schedule": crontab(hour=0, minute=0, day_of_week="sunday"),
     },
-    # OpenTopography DEMs — monthly on day 1 at 07:00.
+    # OpenTopography DEMs - monthly on day 1 at 07:00.
     # The source re-fetches only if the last successful job is >365 days old,
     # so running monthly is safe and ensures new datasets are picked up quickly.
     "mine-opentopo-dems-monthly": {
         "task": "apps.mining.tasks.mine_opentopo_dems",
         "schedule": crontab(hour=7, minute=0, day_of_month="1"),
     },
-    # STAC sources — WorldCover and CopDEM are (effectively) static datasets;
+    # STAC sources - WorldCover and CopDEM are (effectively) static datasets;
     # annual refresh on Jan 1/5 is sufficient.
     "mine-worldcover-annual": {
         "task": "apps.mining.tasks.mine_worldcover",
@@ -44,7 +44,7 @@ app.conf.beat_schedule = {
         "schedule": crontab(hour=5, minute=0, day_of_month="5", month_of_year="1"),
         "kwargs": {"slug": "cop-dem-30"},
     },
-    # Sentinel-2, Landsat, Sentinel-1 — monthly on day 10 (gives enough time
+    # Sentinel-2, Landsat, Sentinel-1 - monthly on day 10 (gives enough time
     # for the previous month's imagery to be processed and available).
     "mine-sentinel2-monthly": {
         "task": "apps.mining.tasks.mine_stac_sources",
@@ -61,7 +61,7 @@ app.conf.beat_schedule = {
         "schedule": crontab(hour=5, minute=0, day_of_month="10"),
         "kwargs": {"slug": "sentinel-1-rtc"},
     },
-    # MODIS Terra daily LST — runs every day at 03:00 to back-fill the previous
+    # MODIS Terra daily LST - runs every day at 03:00 to back-fill the previous
     # day's granules (MOD11A1 is typically available with ~1 day latency).
     "mine-modis-lst-daily": {
         "task": "apps.mining.tasks.mine_earthaccess_sources",

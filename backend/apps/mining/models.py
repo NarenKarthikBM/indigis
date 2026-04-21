@@ -81,4 +81,4 @@ class MiningJob(models.Model):
         ordering = ["-created_at"]
 
     def __str__(self):
-        return f"{self.source.slug} [{self.status}] {self.period_start}–{self.period_end}"
+        return f"{self.source.slug} [{self.status}] {self.period_start}-{self.period_end}"

@@ -24,7 +24,7 @@ def validate_graph(nodes, edges):
 
 
 def topological_sort(nodes, edges):
-    """Kahn's algorithm — raises WorkflowError if a cycle is detected."""
+    """Kahn's algorithm - raises WorkflowError if a cycle is detected."""
     in_degree = {n["id"]: 0 for n in nodes}
     adjacency = defaultdict(list)
 
@@ -44,7 +44,7 @@ def topological_sort(nodes, edges):
                 queue.append(neighbor)
 
     if len(sorted_ids) != len(nodes):
-        raise WorkflowError("Workflow graph contains a cycle — cannot execute.")
+        raise WorkflowError("Workflow graph contains a cycle - cannot execute.")
 
     return sorted_ids
 

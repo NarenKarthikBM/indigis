@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 class GEEMiningSource(BaseMiningSource):
     """
-    Google Earth Engine data source — NOT YET IMPLEMENTED.
+    Google Earth Engine data source - NOT YET IMPLEMENTED.
 
     To wire real GEE access:
     1. Install `earthengine-api` and `geemap`.

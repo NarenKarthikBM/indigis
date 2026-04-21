@@ -5,12 +5,12 @@ Fetches WorldCover tiles covering India from the Element84 Earth Search STAC
 catalogue (collection: esa-worldcover) and mosaics them into a single COG.
 
 Available years: 2020 onwards. Data for a given year is typically released
-12–18 months after the reference year, so we never attempt to fetch the
+12-18 months after the reference year, so we never attempt to fetch the
 current calendar year.
 
 DataSource config (optional):
     {
-        "bbox": [68.0, 8.0, 97.5, 37.5]   # west, south, east, north — defaults to India
+        "bbox": [68.0, 8.0, 97.5, 37.5]   # west, south, east, north - defaults to India
     }
 """
 
@@ -31,14 +31,14 @@ logger = logging.getLogger(__name__)
 STAC_ENDPOINT = "https://earth-search.aws.element84.com/v1"
 COLLECTION = "esa-worldcover"
 FIRST_YEAR = 2020
-DEFAULT_BBOX = (68.0, 8.0, 97.5, 37.5)  # west, south, east, north — India
+DEFAULT_BBOX = (68.0, 8.0, 97.5, 37.5)  # west, south, east, north - India
 
 
 class WorldCoverSource(BaseMiningSource):
     source_slug = "worldcover"
 
     # ------------------------------------------------------------------
-    # Period logic — one job per missing year
+    # Period logic - one job per missing year
     # ------------------------------------------------------------------
 
     def get_periods_to_fetch(self) -> list[tuple[date, date]]:
@@ -50,7 +50,7 @@ class WorldCoverSource(BaseMiningSource):
             .values_list("period_start__year", flat=True)
         )
 
-        # Never attempt the current year — data hasn't been released yet
+        # Never attempt the current year - data hasn't been released yet
         last_available = date.today().year - 1
         missing = [y for y in range(FIRST_YEAR, last_available + 1) if y not in done_years]
 
@@ -94,7 +94,7 @@ class WorldCoverSource(BaseMiningSource):
         hrefs = []
         for item in items:
             if "map" not in item.assets:
-                logger.warning("Item %s has no 'map' asset — skipping.", item.id)
+                logger.warning("Item %s has no 'map' asset - skipping.", item.id)
                 continue
             hrefs.append(item.assets["map"].href)
 

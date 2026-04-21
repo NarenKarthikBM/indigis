@@ -13,7 +13,7 @@ Product details
 ---------------
 * Short name : MOD11A1 (Terra, daily)
 * Resolution : ~1 km
-* Band used  : LST_Day_1km  (scale = 0.02 K, fill = 0, valid 7500–65535)
+* Band used  : LST_Day_1km  (scale = 0.02 K, fill = 0, valid 7500-65535)
 * Output     : float32 COG, LST in °C, nodata = -9999.0
 
 Authentication
@@ -82,7 +82,7 @@ class MODISLSTSource(BaseMiningSource):
         self.source_slug = datasource_slug
 
     # ------------------------------------------------------------------
-    # Period logic — one (month_start, month_end) pair per missing month
+    # Period logic - one (month_start, month_end) pair per missing month
     # ------------------------------------------------------------------
 
     def get_periods_to_fetch(self) -> list[tuple[date, date]]:
@@ -105,7 +105,7 @@ class MODISLSTSource(BaseMiningSource):
         last_complete = date(today.year, today.month, 1) - timedelta(days=1)
         last_month_start = date(last_complete.year, last_complete.month, 1)
 
-        # Months already done or failed — skip re-fetching to avoid infinite retries.
+        # Months already done or failed - skip re-fetching to avoid infinite retries.
         done_months: set[date] = set(
             MiningJob.objects.filter(
                 source__slug=self.source_slug,
@@ -125,7 +125,7 @@ class MODISLSTSource(BaseMiningSource):
         return periods
 
     # ------------------------------------------------------------------
-    # Fetch — pick best day, download HDF4 granules, warp, mosaic, COG
+    # Fetch - pick best day, download HDF4 granules, warp, mosaic, COG
     # ------------------------------------------------------------------
 
     def fetch(self, period_start: date, period_end: date) -> str:
@@ -161,12 +161,12 @@ class MODISLSTSource(BaseMiningSource):
             )
 
         logger.info(
-            "MODISLSTSource: %d granule(s) found — selecting best day by cloud cover",
+            "MODISLSTSource: %d granule(s) found - selecting best day by cloud cover",
             len(all_results),
         )
         best_day, best_granules = _pick_best_day(all_results)
         logger.info(
-            "MODISLSTSource: best day = %s (%d granule(s)) — downloading",
+            "MODISLSTSource: best day = %s (%d granule(s)) - downloading",
             best_day, len(best_granules),
         )
 
@@ -192,7 +192,7 @@ class MODISLSTSource(BaseMiningSource):
                         tile_paths.append(tile_path)
                 except Exception as exc:
                     logger.warning(
-                        "MODISLSTSource: skipping %s — %s",
+                        "MODISLSTSource: skipping %s - %s",
                         os.path.basename(hdf_path), exc,
                     )
 
@@ -228,7 +228,7 @@ class MODISLSTSource(BaseMiningSource):
                 os.remove(cog_path)
                 raise RuntimeError(
                     f"No valid LST pixels in bbox {bbox} for {month_label} "
-                    "(cloud contamination or missing data — month will be skipped on re-run)"
+                    "(cloud contamination or missing data - month will be skipped on re-run)"
                 )
 
         logger.info(
@@ -253,7 +253,7 @@ class MODISLSTSource(BaseMiningSource):
         """Return the full subdataset URI for LST_Day_1km, or None if absent.
 
         Opening the HDF4 container (not a subdataset) always triggers
-        NotGeoreferencedWarning because the container has no geotransform —
+        NotGeoreferencedWarning because the container has no geotransform -
         only the subdatasets inside do.  Suppress it here; it is expected.
         """
         import warnings
@@ -318,7 +318,7 @@ class MODISLSTSource(BaseMiningSource):
         # Skip tile if entirely nodata
         if np.all(dst_arr == NODATA_OUT):
             logger.debug(
-                "MODISLSTSource: tile %s is entirely nodata — skipping",
+                "MODISLSTSource: tile %s is entirely nodata - skipping",
                 os.path.basename(hdf_path),
             )
             return None
@@ -388,7 +388,7 @@ def _granule_date(granule) -> str:
 
 
 def _cloud_cover(granule) -> float:
-    """Extract cloud cover percentage (0–100) from granule CMR metadata.
+    """Extract cloud cover percentage (0-100) from granule CMR metadata.
 
     Returns 100.0 when the attribute is absent so that granules without
     metadata sort to the end.

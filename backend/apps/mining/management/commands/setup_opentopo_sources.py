@@ -60,7 +60,7 @@ class Command(BaseCommand):
             ds, was_created = DataSource.objects.get_or_create(
                 slug=slug,
                 defaults={
-                    "label": f"OpenTopography — {label}",
+                    "label": f"OpenTopography - {label}",
                     "source_type": "opentopo",
                     "fetch_schedule": "0 7 1 * *",  # monthly, day-1, 07:00
                     "is_active": True,
@@ -87,7 +87,7 @@ class Command(BaseCommand):
             self.stdout.write("")
             self.stdout.write(
                 self.style.WARNING(
-                    "No bounding box supplied — sources won't run until you add\n"
+                    "No bounding box supplied - sources won't run until you add\n"
                     "south/north/west/east to each DataSource.config (via admin or --update)."
                 )
             )

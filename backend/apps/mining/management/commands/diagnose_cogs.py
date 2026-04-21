@@ -2,7 +2,7 @@
 Management command to diagnose COG files linked to RasterAsset records.
 
 Reports CRS, bounds, shape, nodata, emptiness, and COG validity for
-every asset — or for a specific layer slug / directory.
+every asset - or for a specific layer slug / directory.
 
 Usage:
     python manage.py diagnose_cogs
@@ -67,7 +67,7 @@ class Command(BaseCommand):
             fs_path = asset.cog_url.replace("/data/cogs/", "/cogs/", 1)
             self.stdout.write(
                 f"\n[asset {asset.id}] layer={asset.layer.slug}  "
-                f"period={asset.period_label or '—'}"
+                f"period={asset.period_label or '-'}"
             )
             self.stdout.write(f"  db cog_url : {asset.cog_url}")
             self.stdout.write(f"  fs path    : {fs_path}")
@@ -97,7 +97,7 @@ class Command(BaseCommand):
 
                     if valid_pixels == 0:
                         self.stdout.write(
-                            self.style.ERROR("  ✗ EMPTY — all pixels are nodata/zero")
+                            self.style.ERROR("  ✗ EMPTY - all pixels are nodata/zero")
                         )
                         bad += 1
                         if delete_empty:
@@ -117,7 +117,7 @@ class Command(BaseCommand):
                             self.style.WARNING(
                                 f"  ⚠ Non-geographic CRS ({r.crs}).  "
                                 "TiTiler can serve this but the source file was likely "
-                                "created with the old projection bug — re-run mining to regenerate."
+                                "created with the old projection bug - re-run mining to regenerate."
                             )
                         )
 

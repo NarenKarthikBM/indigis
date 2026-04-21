@@ -4,7 +4,7 @@ their COG files from disk.
 
 Usage
 -----
-    # Dry run — show what would be deleted
+    # Dry run - show what would be deleted
     python manage.py clear_layers --dry-run
 
     # Delete DB records only (keep files on disk)
@@ -83,7 +83,7 @@ class Command(BaseCommand):
             files_deleted = 0
             files_missing = 0
             for url in cog_paths:
-                # cog_url uses /data/cogs/... — map back to filesystem path
+                # cog_url uses /data/cogs/... - map back to filesystem path
                 file_path = url.replace("/data/cogs/", "/cogs/", 1)
                 if os.path.exists(file_path):
                     if not dry_run:

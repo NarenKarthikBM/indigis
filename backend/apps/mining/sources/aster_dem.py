@@ -85,7 +85,7 @@ class AsterDEMSource(BaseMiningSource):
         self.source_slug = datasource_slug
 
     # ------------------------------------------------------------------
-    # Period logic — one (month_start, month_end) pair per missing month
+    # Period logic - one (month_start, month_end) pair per missing month
     # ------------------------------------------------------------------
 
     def get_periods_to_fetch(self) -> list[tuple[date, date]]:
@@ -126,7 +126,7 @@ class AsterDEMSource(BaseMiningSource):
         return periods
 
     # ------------------------------------------------------------------
-    # Fetch — select best granules, download, warp, mosaic, COG
+    # Fetch - select best granules, download, warp, mosaic, COG
     # ------------------------------------------------------------------
 
     def fetch(self, period_start: date, period_end: date) -> str:
@@ -162,7 +162,7 @@ class AsterDEMSource(BaseMiningSource):
             )
 
         logger.info(
-            "AsterDEMSource: %d granule(s) found — selecting up to %d with lowest cloud cover",
+            "AsterDEMSource: %d granule(s) found - selecting up to %d with lowest cloud cover",
             len(results), MAX_GRANULES,
         )
         selected = _select_best_granules(results, MAX_GRANULES)
@@ -190,7 +190,7 @@ class AsterDEMSource(BaseMiningSource):
                         tile_paths.append(tile_path)
                 except Exception as exc:
                     logger.warning(
-                        "AsterDEMSource: skipping %s — %s",
+                        "AsterDEMSource: skipping %s - %s",
                         os.path.basename(str(hdf_path)), exc,
                     )
 
@@ -223,7 +223,7 @@ class AsterDEMSource(BaseMiningSource):
                 os.remove(cog_path)
                 raise RuntimeError(
                     f"No valid DEM pixels in bbox {bbox} for {month_label} "
-                    "(cloud contamination or missing data — month will be skipped on re-run)"
+                    "(cloud contamination or missing data - month will be skipped on re-run)"
                 )
 
         logger.info(
@@ -320,7 +320,7 @@ class AsterDEMSource(BaseMiningSource):
 
         if np.all(dst_arr == NODATA_OUT):
             logger.debug(
-                "AsterDEMSource: tile %s is entirely nodata — skipping",
+                "AsterDEMSource: tile %s is entirely nodata - skipping",
                 os.path.basename(hdf_path),
             )
             return None
@@ -379,7 +379,7 @@ class AsterDEMSource(BaseMiningSource):
 # ------------------------------------------------------------------
 
 def _cloud_cover(granule) -> float:
-    """Extract cloud cover percentage (0–100) from earthaccess granule metadata.
+    """Extract cloud cover percentage (0-100) from earthaccess granule metadata.
 
     Falls back to 100.0 (worst) when the CMR record does not carry a
     CloudCover attribute, so those granules sort to the end of the list.

@@ -6,7 +6,7 @@ choices.  This migration brings the DB schema in sync with the choices
 already present in models.py (opentopo, stac) and adds the new one
 (earthaccess).
 
-This is a Django AlterField — a no-op at the PostgreSQL level since
+This is a Django AlterField - a no-op at the PostgreSQL level since
 choices are only enforced in Python, but needed so makemigrations
 stays clean.
 """

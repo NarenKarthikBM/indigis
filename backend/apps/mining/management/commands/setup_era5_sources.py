@@ -18,37 +18,23 @@ from apps.mining.models import DataSource
 
 # N, W, S, E
 DEFAULT_BBOX = [37.5, 68.0, 8.0, 97.5]
-DEFAULT_START_YEAR = 2020
+DEFAULT_START_YEAR = 1990
 
-# All 11 output layers
+# 7 output layers (no daily COGs - pipeline is NetCDF-native via CDO)
 LAYER_SPECS = [
     # ── 2m Temperature ────────────────────────────────────────────────────
-    {
-        "slug": "era5-t2m-daily-mean",
-        "label": "ERA5 2m Temperature Daily Mean",
-        "temporal_type": Layer.TEMPORAL_DAILY,
-        "description": "ERA5 reanalysis 2m air temperature, daily mean (°C). ~28 km grid.",
-        "resolution": "~28 km",
-    },
-    {
-        "slug": "era5-t2m-daily-min",
-        "label": "ERA5 2m Temperature Daily Minimum",
-        "temporal_type": Layer.TEMPORAL_DAILY,
-        "description": "ERA5 reanalysis 2m air temperature, daily minimum (°C). ~28 km grid.",
-        "resolution": "~28 km",
-    },
-    {
-        "slug": "era5-t2m-daily-max",
-        "label": "ERA5 2m Temperature Daily Maximum",
-        "temporal_type": Layer.TEMPORAL_DAILY,
-        "description": "ERA5 reanalysis 2m air temperature, daily maximum (°C). ~28 km grid.",
-        "resolution": "~28 km",
-    },
     {
         "slug": "era5-t2m-monthly-mean",
         "label": "ERA5 2m Temperature Monthly Mean",
         "temporal_type": Layer.TEMPORAL_MONTHLY,
         "description": "ERA5 reanalysis 2m air temperature, monthly mean (°C). ~28 km grid.",
+        "resolution": "~28 km",
+    },
+    {
+        "slug": "era5-t2m-monthly-min",
+        "label": "ERA5 2m Temperature Monthly Minimum",
+        "temporal_type": Layer.TEMPORAL_MONTHLY,
+        "description": "ERA5 reanalysis 2m air temperature, monthly minimum (°C). ~28 km grid.",
         "resolution": "~28 km",
     },
     {
@@ -81,13 +67,6 @@ LAYER_SPECS = [
     },
     # ── Total Precipitation ───────────────────────────────────────────────
     {
-        "slug": "era5-precip-daily-sum",
-        "label": "ERA5 Total Precipitation Daily Sum",
-        "temporal_type": Layer.TEMPORAL_DAILY,
-        "description": "ERA5 reanalysis total precipitation, daily sum (m). ~28 km grid.",
-        "resolution": "~28 km",
-    },
-    {
         "slug": "era5-precip-monthly-sum",
         "label": "ERA5 Total Precipitation Monthly Sum",
         "temporal_type": Layer.TEMPORAL_MONTHLY,
@@ -103,7 +82,7 @@ LAYER_SPECS = [
     },
 ]
 
-# DataSource records — one per CDS variable
+# DataSource records - one per CDS variable
 DATASOURCE_SPECS = [
     {
         "slug": "era5-2m-temperature",
@@ -111,8 +90,7 @@ DATASOURCE_SPECS = [
         "variable": "2m_temperature",
         "fetch_schedule": "0 2 1 * *",  # monthly, 1st at 02:00
         "layer_slugs": [
-            "era5-t2m-daily-mean", "era5-t2m-daily-min", "era5-t2m-daily-max",
-            "era5-t2m-monthly-mean", "era5-t2m-monthly-max",
+            "era5-t2m-monthly-mean", "era5-t2m-monthly-min", "era5-t2m-monthly-max",
             "era5-t2m-yearly-mean", "era5-t2m-yearly-min", "era5-t2m-yearly-max",
         ],
     },
@@ -122,7 +100,6 @@ DATASOURCE_SPECS = [
         "variable": "total_precipitation",
         "fetch_schedule": "0 3 1 * *",  # monthly, 1st at 03:00
         "layer_slugs": [
-            "era5-precip-daily-sum",
             "era5-precip-monthly-sum",
             "era5-precip-yearly-sum",
         ],

@@ -112,7 +112,7 @@ export default function ResultPreview() {
         )}
         {result.status === "completed" && result.result_type && (
           <span style={{ fontSize: 11, color: "#22c55e" }}>
-            {result.result_type} — completed
+            {result.result_type} - completed
           </span>
         )}
 

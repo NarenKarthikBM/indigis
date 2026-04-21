@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 class CHIRPSSource(BaseMiningSource):
-    """CHIRPS daily precipitation (5 km). Stub — real HTTP fetch wired later."""
+    """CHIRPS daily precipitation (5 km). Stub - real HTTP fetch wired later."""
 
     source_slug = "chirps"
 
@@ -33,7 +33,7 @@ class CHIRPSSource(BaseMiningSource):
     def fetch(self, period_start: date, period_end: date) -> str:
         """[STUB] Log and write a placeholder file so the pipeline runs end-to-end."""
         logger.warning(
-            "[STUB] CHIRPSSource.fetch(%s, %s) — placeholder file only; wire real HTTP fetch later.",
+            "[STUB] CHIRPSSource.fetch(%s, %s) - placeholder file only; wire real HTTP fetch later.",
             period_start,
             period_end,
         )

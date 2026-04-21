@@ -32,7 +32,7 @@ export function useTaskPoller(
           }
         }
       } catch {
-        // Network error — keep polling
+        // Network error - keep polling
       }
     }
 

@@ -36,7 +36,7 @@ class Sentinel2Source(STACSource):
     asset_key = "visual"
 
     # ------------------------------------------------------------------
-    # Period logic — one period per missing calendar month
+    # Period logic - one period per missing calendar month
     # ------------------------------------------------------------------
 
     def get_periods_to_fetch(self) -> list[tuple[date, date]]:

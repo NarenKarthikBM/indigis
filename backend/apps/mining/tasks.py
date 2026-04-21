@@ -102,7 +102,7 @@ def mine_stac_sources(slug: str | None = None):
     for ds_slug in slugs:
         dotted = _STAC_REGISTRY.get(ds_slug)
         if dotted is None:
-            logger.warning("mine_stac_sources: no class registered for slug '%s' — skipping.", ds_slug)
+            logger.warning("mine_stac_sources: no class registered for slug '%s' - skipping.", ds_slug)
             continue
         SourceClass = _import_source_class(dotted)
         # WorldCoverSource has a fixed source_slug and no __init__ override;
@@ -142,7 +142,7 @@ def mine_earthaccess_sources(slug: str | None = None):
         dotted = _EARTHACCESS_REGISTRY.get(ds_slug)
         if dotted is None:
             logger.warning(
-                "mine_earthaccess_sources: no class registered for slug '%s' — skipping.", ds_slug
+                "mine_earthaccess_sources: no class registered for slug '%s' - skipping.", ds_slug
             )
             continue
         SourceClass = _import_source_class(dotted)
@@ -177,7 +177,7 @@ def mine_era5_sources(slug: str | None = None):
         dotted = _ERA5_REGISTRY.get(ds_slug)
         if dotted is None:
             logger.warning(
-                "mine_era5_sources: no class registered for slug '%s' — skipping.", ds_slug
+                "mine_era5_sources: no class registered for slug '%s' - skipping.", ds_slug
             )
             continue
         SourceClass = _import_source_class(dotted)
@@ -213,4 +213,4 @@ def cleanup_old_cogs():
         except OSError as exc:
             logger.warning("cleanup_old_cogs: could not remove %s: %s", path, exc)
 
-    logger.info("cleanup_old_cogs: done — removed %d orphaned file(s)", removed)
+    logger.info("cleanup_old_cogs: done - removed %d orphaned file(s)", removed)

@@ -36,7 +36,7 @@ client.interceptors.response.use(
           _refreshing = false;
           return client(original);
         } catch {
-          // refresh failed — clear and redirect
+          // refresh failed - clear and redirect
         }
       }
       _refreshing = false;

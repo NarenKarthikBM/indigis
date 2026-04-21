@@ -5,7 +5,7 @@ import type { RegionStatsResponse } from "../../types/stats.types";
 import Histogram from "./Histogram";
 
 function fmt(v: number | null | undefined): string {
-  if (v == null) return "—";
+  if (v == null) return "-";
   const abs = Math.abs(v);
   if (abs === 0) return "0";
   if (abs >= 10000 || (abs < 0.001)) return v.toExponential(2);
@@ -114,7 +114,7 @@ function StatsPlot({ s }: StatsPlotProps) {
         />
       )}
 
-      {/* IQR box (p25–p75) */}
+      {/* IQR box (p25-p75) */}
       {iqrBox && (
         <rect
           x={iqrBox.x1}
@@ -181,7 +181,7 @@ function StatsPlot({ s }: StatsPlotProps) {
 
 function PlotLegend() {
   const items = [
-    { shape: "rect", color: "#8B5CF6", label: "IQR (p25–p75)" },
+    { shape: "rect", color: "#8B5CF6", label: "IQR (p25-p75)" },
     { shape: "rect", color: "#8B5CF620", label: "±1 Std Dev", border: "#8B5CF6" },
     { shape: "line", color: "#F8FAFC", label: "Median" },
     { shape: "diamond", color: "#FBBF24", label: "Mean" },

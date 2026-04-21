@@ -4,13 +4,13 @@ Landsat Collection 2 Level-2 source (30 m, monthly best scene).
 For each missing calendar month since 2013-01 the source selects the
 least-cloudy scene from the Element84 Earth Search STAC catalogue
 (collection: landsat-c2-l2), reads the bbox window from the configured
-asset (default: "red" — Band 4, 30 m surface reflectance), and writes
+asset (default: "red" - Band 4, 30 m surface reflectance), and writes
 a COG.
 
 DataSource config (optional):
     {
         "bbox": [68.0, 8.0, 97.5, 37.5],   # west, south, east, north
-        "asset_key": "red",                  # default — any band alias works
+        "asset_key": "red",                  # default - any band alias works
         "cloud_cover_threshold": 30          # default 30 %
     }
 """
@@ -34,7 +34,7 @@ class LandsatSource(STACSource):
     asset_key = "red"  # Band 4 SR reflectance; configurable via DataSource.config
 
     # ------------------------------------------------------------------
-    # Period logic — one period per missing calendar month
+    # Period logic - one period per missing calendar month
     # ------------------------------------------------------------------
 
     def get_periods_to_fetch(self) -> list[tuple[date, date]]:

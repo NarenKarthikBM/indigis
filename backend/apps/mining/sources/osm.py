@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 class OSMTransportSource(BaseMiningSource):
-    """OSM transport network (monthly snapshot). Stub — real Overpass/PBF fetch wired later."""
+    """OSM transport network (monthly snapshot). Stub - real Overpass/PBF fetch wired later."""
 
     source_slug = "osm-transport"
 
@@ -33,7 +33,7 @@ class OSMTransportSource(BaseMiningSource):
     def fetch(self, period_start: date, period_end: date) -> str:
         """[STUB] Log and write a placeholder file so the pipeline runs end-to-end."""
         logger.warning(
-            "[STUB] OSMTransportSource.fetch(%s, %s) — placeholder file only; wire real Overpass fetch later.",
+            "[STUB] OSMTransportSource.fetch(%s, %s) - placeholder file only; wire real Overpass fetch later.",
             period_start,
             period_end,
         )
