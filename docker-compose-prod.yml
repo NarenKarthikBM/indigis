@@ -1,0 +1,28 @@
+version: "3.9"
+
+services:
+  backend:
+    build: ./backend
+    command: gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 2
+    volumes:
+      - ./backend:/app
+      - ./frontend/dist:/app/frontend/dist:ro
+      - media-data:/app/media
+    ports:
+      - "8000:8000"
+    environment:
+      - DJANGO_SETTINGS_MODULE=config.settings.dev
+      - DB_HOST=${DB_HOST}
+      - DB_NAME=${DB_NAME:-indigis}
+      - DB_USER=${DB_USER:-indigis}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_PORT=${DB_PORT:-5432}
+      - TITILER_PUBLIC_URL=${TITILER_PUBLIC_URL:-http://localhost:8080}
+      - COG_HTTP_BASE_URL=${COG_HTTP_BASE_URL:-http://backend:8000/media/cogs}
+      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-indigis.narenwebworks.in}
+    env_file:
+      - .env
+
+volumes:
+  media-data:

@@ -417,7 +417,7 @@ export default function SOIComparisonChart({ data, trend, units, indexName }: Pr
           <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-teal-500 shrink-0 " />
             <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
-              vs IOD / DMI · Annual
+              vs IOD / DMI
             </span>
           </div>
           <div className="flex items-center gap-1">
