@@ -15,3 +15,4 @@ class RasterDistrictStatsAdmin(admin.ModelAdmin):
     list_display = ("raster_asset", "district", "mean", "min", "max", "computed_at")
     list_filter = ("district__state",)
     raw_id_fields = ("raster_asset", "district")
+

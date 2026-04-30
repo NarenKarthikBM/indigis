@@ -43,10 +43,21 @@ class ReturnPeriodSerializer(serializers.Serializer):
     rp_100 = serializers.FloatField(allow_null=True)
 
 
+class GEVParamsSerializer(serializers.Serializer):
+    """Fitted GEV distribution parameters for a district's annual time series."""
+    loc = serializers.FloatField()
+    scale = serializers.FloatField()
+    shape = serializers.FloatField()
+    n_years = serializers.IntegerField()
+    period_start = serializers.IntegerField()
+    period_end = serializers.IntegerField()
+
+
 class IndexProfileSerializer(serializers.Serializer):
     time_series = TimeSeriesPointSerializer(many=True)
     trend = TrendSerializer(allow_null=True)
     return_periods = ReturnPeriodSerializer(allow_null=True)
+    gev_params = GEVParamsSerializer(allow_null=True)
     latest_value = serializers.FloatField(allow_null=True)
     units = serializers.CharField()
 

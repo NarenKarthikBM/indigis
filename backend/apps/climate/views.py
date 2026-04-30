@@ -260,7 +260,7 @@ def district_profile(request, district_code: str):
                 "period": params.get("period", []),
             }
 
-        # GEV return periods
+        # GEV return periods (per-pixel spatial averages)
         gev_data = {}
         for rp in [10, 25, 50, 100]:
             gev_asset = _latest_asset(f"gev-rp{rp}-{index_name.lower()}")
@@ -269,6 +269,22 @@ def district_profile(request, district_code: str):
                     raster_asset=gev_asset, district=district
                 ).first()
                 gev_data[f"rp_{rp}"] = gev_stat.mean if gev_stat else None
+
+        # GEV distribution parameters fitted to the district's annual time series
+        from apps.climate.models import DistrictGEVParams
+        gev_params_obj = DistrictGEVParams.objects.filter(
+            district=district, index_name=index_name
+        ).first()
+        gev_params_data = None
+        if gev_params_obj:
+            gev_params_data = {
+                "loc": gev_params_obj.loc,
+                "scale": gev_params_obj.scale,
+                "shape": gev_params_obj.shape,
+                "n_years": gev_params_obj.n_years,
+                "period_start": gev_params_obj.period_start,
+                "period_end": gev_params_obj.period_end,
+            }
 
         # Teleconnection correlations (annual)
         correlations = {}
@@ -319,6 +335,7 @@ def district_profile(request, district_code: str):
             "time_series": time_series,
             "trend": trend_data,
             "return_periods": gev_data if gev_data else None,
+            "gev_params": gev_params_data,
             "correlations": correlations if correlations else None,
             "latest_value": latest_value,
             "units": cfg["units"],

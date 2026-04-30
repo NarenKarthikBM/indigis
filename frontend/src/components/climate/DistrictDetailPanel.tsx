@@ -6,7 +6,7 @@ import type { TeleconnectionName, SeasonalSOIKey, SeasonalDMIKey } from "../../t
 
 type CorrSeason = "Annual" | "DJF" | "MAM" | "JJA" | "SON";
 type CorrTC = "SOI" | "DMI";
-type ActiveTab = "overview" | "series" | "soi" | "iod" | "returnperiods";
+type ActiveTab = "overview" | "series" | "teleconnections" | "returnperiods";
 
 // All seasons (including Annual) used for computing best-r stats in Overview
 const ALL_SEASONS: CorrSeason[] = ["Annual", "DJF", "MAM", "JJA", "SON"];
@@ -38,107 +38,200 @@ interface CorrCardProps {
   correlations: ReturnType<typeof Object.fromEntries> | null | undefined;
 }
 
+function rColor(r: number | null, sig: boolean): string {
+  if (r === null) return "text-slate-700";
+  if (!sig) return "text-slate-500";
+  return r > 0 ? "text-red-400" : "text-sky-400";
+}
+
+function rBarColor(r: number | null, sig: boolean): string {
+  if (r === null || !sig) return "bg-slate-600";
+  return r > 0 ? "bg-red-500" : "bg-sky-500";
+}
+
 function CorrCard({ tc, season, setSeason, correlations }: CorrCardProps) {
   const isSOI = tc === "SOI";
-  const dotColor = isSOI ? "bg-violet-500" : "bg-teal-500";
-  const headerColor = isSOI ? "text-violet-400" : "text-teal-400";
+  const accentColor = isSOI ? "text-violet-400" : "text-teal-400";
+  const accentDot = isSOI ? "bg-violet-500" : "bg-teal-500";
+  const accentActive = isSOI ? "bg-violet-700/70 border-violet-600 text-white" : "bg-teal-700/70 border-teal-600 text-white";
   const info = correlations?.[corrKey(tc, season)];
 
+  // Collect all-season r values for the overview grid
+  const allSeasonData = CORR_SEASONS.map((s) => {
+    const d = correlations?.[corrKey(tc, s)];
+    const r = d?.r ?? null;
+    const sig = r !== null && Math.abs(r) > 0.3;
+    return { s, r, sig, hasData: !!d };
+  });
+
   return (
-    <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
-      <div className="px-3.5 pt-2.5 pb-2 border-b border-slate-700">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${dotColor}`} />
-            <span className={`text-[11px] font-semibold uppercase tracking-wider ${headerColor}`}>
-              {isSOI ? "SOI Correlation" : "IOD / DMI Correlation"}
-            </span>
-          </div>
-          <span className="text-[10px] text-slate-600">* |r| &gt; 0.3</span>
+    <div>
+      {/* Header */}
+      <div className="px-3.5 pt-2.5 pb-2.5 border-b border-slate-700">
+        <div className="flex items-center gap-2 mb-2.5">
+          <div className={`w-1.5 h-1.5 rounded-full ${accentDot}`} />
+          <span className={`text-[11px] font-semibold uppercase tracking-wider ${accentColor}`}>
+            {isSOI ? "ENSO / SOI Correlation" : "IOD / DMI Correlation"}
+          </span>
         </div>
-        <div className="flex gap-1 p-0.5 bg-slate-900 rounded-lg">
-          {CORR_SEASONS.map((s) => {
-            const hasData = !!(correlations?.[corrKey(tc, s)]);
+
+        {/* Season tabs — color-coded by r magnitude */}
+        <div className="flex gap-1 p-0.5 bg-slate-900/80 rounded-lg">
+          {allSeasonData.map(({ s, r, sig, hasData }) => {
             const active = season === s;
             return (
               <button
                 key={s}
                 onClick={() => hasData && setSeason(s)}
                 className={[
-                  "flex-1 py-1 rounded-md text-[10px] font-medium transition-all",
+                  "flex-1 flex flex-col items-center pt-1 pb-1.5 rounded-md text-[10px] font-medium transition-all gap-0.5",
                   active
-                    ? "bg-slate-700 text-white shadow-sm border border-slate-600"
+                    ? `${accentActive} shadow-sm border`
                     : hasData
-                    ? "text-slate-400 hover:text-slate-200"
-                    : "text-slate-700 cursor-not-allowed",
+                    ? "text-slate-400 hover:text-slate-200 border border-transparent"
+                    : "text-slate-700 cursor-not-allowed border border-transparent",
                 ].join(" ")}
               >
-                {s}
+                <span>{s}</span>
+                {/* Mini r-bar indicator */}
+                <div className="w-full px-1.5 h-1 relative">
+                  <div className="h-full rounded-full bg-slate-700/60 overflow-hidden relative">
+                    {r !== null && hasData && (
+                      <div
+                        className={`absolute top-0 bottom-0 rounded-full transition-all ${rBarColor(r, sig)}`}
+                        style={{
+                          left: r >= 0 ? "50%" : `${50 - Math.abs(r) * 50}%`,
+                          width: `${Math.abs(r) * 50}%`,
+                          opacity: sig ? 1 : 0.4,
+                        }}
+                      />
+                    )}
+                  </div>
+                </div>
               </button>
             );
           })}
         </div>
       </div>
 
-      <div className="px-4 py-4">
+      <div className="px-4 py-4 space-y-4">
         {!info ? (
           <p className="text-xs text-slate-600 text-center py-3">
-            No data for {season === "Annual" ? "annual" : season} season.
+            No data for {season} season.
           </p>
         ) : (() => {
           const r = info.r;
           const sig = r !== null && Math.abs(r) > 0.3;
+          const pct = r !== null ? Math.abs(r) * 50 : 0;
+
           return (
-            <div className="space-y-3">
-              <div className="flex items-end gap-3">
-                <span className={[
-                  "text-3xl font-mono font-bold tabular-nums leading-none",
-                  r === null ? "text-slate-700"
-                    : sig ? r > 0 ? "text-red-400" : "text-blue-400"
-                    : "text-slate-500",
-                ].join(" ")}>
-                  {r !== null ? (r >= 0 ? "+" : "") + r.toFixed(3) : "-"}
+            <>
+              {/* Big r readout */}
+              <div className="flex items-center gap-3">
+                <span className={`text-4xl font-mono font-bold tabular-nums leading-none ${rColor(r, sig)}`}>
+                  {r !== null ? (r >= 0 ? "+" : "") + r.toFixed(3) : "—"}
                 </span>
-                <div className="pb-1 flex flex-col gap-0.5">
+                <div className="flex flex-col gap-1">
                   {sig && (
-                    <span className="text-[10px] font-semibold text-amber-400 bg-amber-950/60 border border-amber-800/60 rounded px-1.5 py-0.5 leading-none">
+                    <span className="text-[10px] font-semibold text-amber-400 bg-amber-950/60 border border-amber-800/60 rounded-md px-1.5 py-0.5 leading-none">
                       Significant
                     </span>
                   )}
-                  <span className="text-[10px] text-slate-600">Pearson r</span>
+                  <span className="text-[10px] text-slate-500">
+                    Pearson r · |r| &gt; 0.3 threshold
+                  </span>
                 </div>
               </div>
 
+              {/* Gauge */}
               <div>
-                <div className="h-4 bg-slate-900 rounded-full overflow-hidden relative">
-                  <div className="absolute top-0 bottom-0 left-1/2 w-0.5 bg-slate-700 z-10" />
+                <div className="relative h-5 bg-slate-900 rounded-full overflow-hidden">
+                  {/* Scale markers at ±0.5 */}
+                  <div className="absolute top-1 bottom-1 left-[25%] w-px bg-slate-700/60" />
+                  <div className="absolute top-1 bottom-1 left-[75%] w-px bg-slate-700/60" />
+                  {/* Centre line */}
+                  <div className="absolute top-0 bottom-0 left-1/2 w-px bg-slate-600 z-10" />
                   {r !== null && (
                     <div
-                      className={["absolute top-1 bottom-1 rounded-full", r >= 0 ? "bg-red-500" : "bg-blue-500"].join(" ")}
+                      className={`absolute top-1.5 bottom-1.5 rounded-full transition-all ${r >= 0 ? "bg-red-500" : "bg-sky-500"}`}
                       style={{
-                        left: r >= 0 ? "50%" : `${50 - Math.abs(r) * 50}%`,
-                        width: `${Math.abs(r) * 50}%`,
+                        left: r >= 0 ? "50%" : `${50 - pct}%`,
+                        width: `${pct}%`,
+                        opacity: sig ? 0.85 : 0.35,
                       }}
                     />
                   )}
                 </div>
-                <div className="flex justify-between mt-1 text-[10px] text-slate-600">
+                <div className="flex justify-between mt-1.5">
+                  <span className="text-[9px] text-slate-600">−1</span>
+                  <span className="text-[9px] text-slate-600">−0.5</span>
+                  <span className="text-[9px] text-slate-500 font-medium">0</span>
+                  <span className="text-[9px] text-slate-600">+0.5</span>
+                  <span className="text-[9px] text-slate-600">+1</span>
+                </div>
+                <div className="flex justify-between mt-0.5">
                   {isSOI ? (
-                    <><span>← La Niña (neg)</span><span>(pos) El Niño →</span></>
+                    <>
+                      <span className="text-[9px] text-sky-700">La Niña</span>
+                      <span className="text-[9px] text-red-800">El Niño</span>
+                    </>
                   ) : (
-                    <><span>← Negative IOD</span><span>Positive IOD →</span></>
+                    <>
+                      <span className="text-[9px] text-sky-700">Neg. IOD</span>
+                      <span className="text-[9px] text-red-800">Pos. IOD</span>
+                    </>
                   )}
                 </div>
               </div>
 
+              {/* All-season overview */}
+              {/* <div className="border border-slate-700/60 rounded-lg overflow-hidden">
+                <div className="px-2.5 py-1.5 bg-slate-900/40 border-b border-slate-700/60">
+                  <span className="text-[9px] font-semibold uppercase tracking-wider text-slate-600">All Seasons</span>
+                </div>
+                <div className="grid grid-cols-4 divide-x divide-slate-700/60">
+                  {allSeasonData.map(({ s, r: rv, sig: sv, hasData }) => {
+                    const isActive = s === season;
+                    return (
+                      <button
+                        key={s}
+                        onClick={() => hasData && setSeason(s)}
+                        className={[
+                          "flex flex-col items-center py-2 px-1 gap-1 transition-colors",
+                          isActive ? "bg-slate-700/40" : hasData ? "hover:bg-slate-700/20" : "cursor-default",
+                        ].join(" ")}
+                      >
+                        <span className={`text-[9px] font-semibold uppercase ${isActive ? accentColor : "text-slate-500"}`}>{s}</span>
+                        <span className={`text-[11px] font-mono tabular-nums font-semibold leading-none ${rColor(rv, sv)}`}>
+                          {rv !== null ? (rv >= 0 ? "+" : "") + rv.toFixed(2) : "—"}
+                        </span>
+                        <div className="w-8 h-1 bg-slate-700 rounded-full overflow-hidden relative">
+                          {rv !== null && hasData && (
+                            <div
+                              className={`absolute top-0 bottom-0 rounded-full ${rBarColor(rv, sv)}`}
+                              style={{
+                                left: rv >= 0 ? "50%" : `${50 - Math.abs(rv) * 50}%`,
+                                width: `${Math.abs(rv) * 50}%`,
+                                opacity: sv ? 0.9 : 0.35,
+                              }}
+                            />
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div> */}
+
+              {/* Footnote */}
               {info.n_years != null && (
-                <p className="text-[10px] text-slate-600 border-t border-slate-700 pt-2">
+                <p className="text-[10px] text-slate-600 border-t border-slate-700/60 pt-2.5">
                   n = {info.n_years} years
                   {info.period ? ` · ${info.period[0]}–${info.period[1]}` : ""}
-                  {season !== "Annual" ? ` · ${season} season` : " · Annual"}
+                  {` · ${season} season`}
                 </p>
               )}
-            </div>
+            </>
           );
         })()}
       </div>
@@ -172,11 +265,10 @@ export default function DistrictDetailPanel() {
   const district = districtProfile?.district;
 
   const TABS: { id: ActiveTab; label: string }[] = [
-    { id: "overview",      label: "Overview" },
-    { id: "series",        label: "Time Series" },
-    { id: "soi",           label: "SOI" },
-    { id: "iod",           label: "IOD" },
-    { id: "returnperiods", label: "Return Periods" },
+    { id: "overview",         label: "Overview" },
+    { id: "series",           label: "Time Series" },
+    { id: "teleconnections",  label: "Teleconnections" },
+    { id: "returnperiods",    label: "Return Periods" },
   ];
 
   const soiCorrs = ALL_SEASONS.map((s) => indexProfile?.correlations?.[corrKey("SOI", s)]?.r)
@@ -373,17 +465,13 @@ export default function DistrictDetailPanel() {
             </div>
           )}
 
-          {/* SOI */}
-          {activeTab === "soi" && (
+          {/* TELECONNECTIONS */}
+          {activeTab === "teleconnections" && (
             <div className="py-3 px-3">
-              <CorrCard tc="SOI" season={soiSeason} setSeason={setSoiSeason} correlations={indexProfile.correlations} />
-            </div>
-          )}
-
-          {/* IOD */}
-          {activeTab === "iod" && (
-            <div className="py-3 px-3">
-              <CorrCard tc="DMI" season={dmiSeason} setSeason={setDmiSeason} correlations={indexProfile.correlations} />
+              <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden divide-y divide-slate-700">
+                <CorrCard tc="SOI" season={soiSeason} setSeason={setSoiSeason} correlations={indexProfile.correlations} />
+                <CorrCard tc="DMI" season={dmiSeason} setSeason={setDmiSeason} correlations={indexProfile.correlations} />
+              </div>
             </div>
           )}
 
@@ -396,27 +484,39 @@ export default function DistrictDetailPanel() {
                   <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">GEV Return Periods</span>
                 </div>
 
-                {indexProfile.return_periods ? (
+                {(indexProfile.return_periods || indexProfile.gev_params) ? (
                   <>
-                    <div className="grid grid-cols-4 divide-x divide-slate-700 border-b border-slate-700">
-                      {([10, 25, 50, 100] as const).map((rp) => {
-                        const key = `rp_${rp}` as keyof typeof indexProfile.return_periods;
-                        const val = indexProfile.return_periods?.[key];
-                        return (
-                          <div key={rp} className="flex flex-col items-center py-3 px-2">
-                            <span className="text-[9px] font-semibold text-slate-500 uppercase mb-1">RP-{rp}</span>
-                            <span className="text-sm font-mono font-bold text-slate-200 tabular-nums">
-                              {val != null ? (val as number).toFixed(1) : "-"}
-                            </span>
-                            <span className="text-[9px] text-slate-600">{indexProfile.units}</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <div className="px-3 pt-2 pb-3" style={{ height: 220 }}>
+                    {indexProfile.return_periods && (
+                      <div className="grid grid-cols-4 divide-x divide-slate-700/60 border-b border-slate-700">
+                        {([
+                          { rp: 10,  accent: "text-sky-400",    dot: "bg-sky-500"    },
+                          { rp: 25,  accent: "text-emerald-400", dot: "bg-emerald-500" },
+                          { rp: 50,  accent: "text-amber-400",  dot: "bg-amber-500"  },
+                          { rp: 100, accent: "text-rose-400",   dot: "bg-rose-500"   },
+                        ] as const).map(({ rp, accent, dot }) => {
+                          const key = `rp_${rp}` as keyof typeof indexProfile.return_periods;
+                          const val = indexProfile.return_periods?.[key];
+                          return (
+                            <div key={rp} className="flex flex-col items-center py-3 px-2 gap-0.5">
+                              <div className="flex items-center gap-1 mb-0.5">
+                                <span className={`w-1.5 h-1.5 rounded-full ${dot} opacity-80`} />
+                                <span className="text-[9px] font-semibold text-slate-500 uppercase tracking-wider">
+                                  {rp}yr
+                                </span>
+                              </div>
+                              <span className={`text-sm font-mono font-bold tabular-nums ${val != null ? accent : "text-slate-700"}`}>
+                                {val != null ? (val as number).toFixed(1) : "—"}
+                              </span>
+                              <span className="text-[9px] text-slate-600">{indexProfile.units}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    <div className="px-3 pt-2 pb-4" style={{ height: 320 }}>
                       <ReturnPeriodChart
                         returnPeriods={indexProfile.return_periods}
-                        timeSeries={indexProfile.time_series}
+                        gevParams={indexProfile.gev_params}
                         units={indexProfile.units}
                         indexName={selectedIndex}
                       />

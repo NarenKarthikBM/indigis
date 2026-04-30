@@ -1,9 +1,9 @@
 import { useState } from "react";
 import {
   ComposedChart,
-  LineChart,
   Bar,
   Line,
+  Area,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -139,11 +139,20 @@ function normalizer(arr: number[]) {
 // ── tooltip ───────────────────────────────────────────────────────────────────
 const DarkTooltip = ({ active, payload, label, suffix = " σ" }: any) => {
   if (!active || !payload?.length) return null;
+  // Filter out the area series (it duplicates the line series)
+  const filtered = payload.filter((p: any) => p.type !== "area");
   return (
-    <div className="bg-slate-800 border border-slate-700 rounded shadow-lg px-3 py-2 text-xs text-slate-200">
-      <p className="font-semibold text-slate-300 mb-1">{label}</p>
-      {payload.map((p: any) => (
-        <p key={p.dataKey} style={{ color: p.color ?? p.fill }}>
+    <div style={{
+      backgroundColor: "#0d1525",
+      border: "1px solid #1e3a5f",
+      borderRadius: 8,
+      boxShadow: "0 4px 20px rgba(0,0,0,0.5)",
+      padding: "8px 12px",
+      fontSize: 11,
+    }}>
+      <p style={{ color: "#94a3b8", fontWeight: 600, marginBottom: 4 }}>{label}</p>
+      {filtered.map((p: any) => (
+        <p key={p.dataKey} style={{ color: p.color ?? p.fill, margin: "2px 0" }}>
           {p.name}: {p.value != null ? Number(p.value).toFixed(2) : "—"}{suffix}
         </p>
       ))}
@@ -162,23 +171,31 @@ interface SubChartProps {
 }
 
 function SubChart({ chartData, tcKey, tcLabel, tcColor, indexLabel, hasTrend }: SubChartProps) {
+  const gradId = `subGrad-${tcKey}`;
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <ComposedChart data={chartData} margin={{ top: 2, right: 8, left: 0, bottom: 2 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+      <ComposedChart data={chartData} margin={{ top: 4, right: 12, left: 24, bottom: 4 }}>
+        <defs>
+          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor="#60a5fa" stopOpacity={0.14} />
+            <stop offset="95%" stopColor="#60a5fa" stopOpacity={0} />
+          </linearGradient>
+        </defs>
+        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
         <XAxis
           dataKey="year"
           tick={{ fontSize: 9, fill: "#475569" }}
-          axisLine={{ stroke: "#1e293b" }}
+          axisLine={false}
           tickLine={false}
           tickFormatter={(v) => String(v)}
         />
         <YAxis
           tick={{ fontSize: 9, fill: "#475569" }}
-          axisLine={{ stroke: "#1e293b" }}
+          axisLine={false}
           tickLine={false}
           tickFormatter={(v) => v.toFixed(1)}
-          label={{ value: "σ", angle: -90, position: "insideLeft", fontSize: 10, fill: "#475569", dy: 8 }}
+          label={{ value: "σ", angle: -90, position: "insideLeft", fontSize: 10, fill: "#475569", dx: -8 }}
+          width={28}
           domain={[-3, 3]}
         />
         <ReferenceLine y={0} stroke="#334155" strokeWidth={1} />
@@ -187,8 +204,16 @@ function SubChart({ chartData, tcKey, tcLabel, tcColor, indexLabel, hasTrend }: 
           dataKey={tcKey}
           name={tcLabel}
           fill={tcColor}
-          opacity={0.55}
+          opacity={0.5}
           radius={[1, 1, 0, 0]}
+        />
+        <Area
+          type="monotone"
+          dataKey="index"
+          stroke="none"
+          fill={`url(#${gradId})`}
+          legendType="none"
+          isAnimationActive={false}
         />
         <Line
           type="monotone"
@@ -196,18 +221,20 @@ function SubChart({ chartData, tcKey, tcLabel, tcColor, indexLabel, hasTrend }: 
           name={indexLabel}
           stroke="#60a5fa"
           dot={false}
-          strokeWidth={1.8}
+          strokeWidth={2}
           connectNulls
+          isAnimationActive={false}
         />
         {hasTrend && (
           <Line
             type="monotone"
             dataKey="trendLine"
             name="Trend"
-            stroke="#f87171"
+            stroke="#fb923c"
             dot={false}
             strokeDasharray="5 3"
-            strokeWidth={1.4}
+            strokeWidth={1.5}
+            isAnimationActive={false}
           />
         )}
       </ComposedChart>
@@ -226,47 +253,63 @@ interface RawChartProps {
 function RawSeriesChart({ chartData, units, indexLabel, hasTrend }: RawChartProps) {
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <LineChart data={chartData} margin={{ top: 2, right: 8, left: 0, bottom: 2 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+      <ComposedChart data={chartData} margin={{ top: 4, right: 12, left: 24, bottom: 4 }}>
+        <defs>
+          <linearGradient id="rawGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor="#60a5fa" stopOpacity={0.18} />
+            <stop offset="95%" stopColor="#60a5fa" stopOpacity={0} />
+          </linearGradient>
+        </defs>
+        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
         <XAxis
           dataKey="year"
           tick={{ fontSize: 9, fill: "#475569" }}
-          axisLine={{ stroke: "#1e293b" }}
+          axisLine={false}
           tickLine={false}
           tickFormatter={(v) => String(v)}
         />
         <YAxis
           tick={{ fontSize: 9, fill: "#475569" }}
-          axisLine={{ stroke: "#1e293b" }}
+          axisLine={false}
           tickLine={false}
           tickFormatter={(v) => v.toFixed(1)}
-          label={{ value: units, angle: -90, position: "insideLeft", fontSize: 10, fill: "#475569", dy: 20 }}
+          label={{ value: units, angle: -90, position: "insideLeft", fontSize: 10, fill: "#475569", dx: -8 }}
           width={36}
           domain={["auto", "auto"]}
         />
         <Tooltip content={<DarkTooltip suffix={` ${units}`} />} />
-        <ReferenceLine y={0} stroke="#334155" strokeWidth={1} />
+        <Area
+          type="monotone"
+          dataKey="index"
+          stroke="none"
+          fill="url(#rawGrad)"
+          legendType="none"
+          isAnimationActive={false}
+        />
         <Line
           type="monotone"
           dataKey="index"
           name={indexLabel}
           stroke="#60a5fa"
-          dot={{ r: 2, fill: "#60a5fa" }}
-          strokeWidth={1.8}
+          dot={{ r: 2.5, fill: "#60a5fa", strokeWidth: 0 }}
+          activeDot={{ r: 4, fill: "#93c5fd" }}
+          strokeWidth={2}
           connectNulls
+          isAnimationActive={false}
         />
         {hasTrend && (
           <Line
             type="monotone"
             dataKey="trendLine"
             name="Trend"
-            stroke="#f87171"
+            stroke="#fb923c"
             dot={false}
             strokeDasharray="5 3"
-            strokeWidth={1.4}
+            strokeWidth={1.5}
+            isAnimationActive={false}
           />
         )}
-      </LineChart>
+      </ComposedChart>
     </ResponsiveContainer>
   );
 }
@@ -337,23 +380,29 @@ export default function SOIComparisonChart({ data, trend, units, indexName }: Pr
     trendLine: addTrend(d.year),
   }));
 
+  const isSig = trend?.slope != null && (trend.p_value ?? 1) < 0.05;
+  const trendUp = (trend?.slope ?? 0) > 0;
+
   return (
-    <div className="flex flex-col gap-3 h-full">
+    <div className="flex flex-col gap-0 h-full">
       {/* ── Raw time series ───────────────────────── */}
-      <div className="flex flex-col flex-1 min-h-0">
-        <div className="flex items-center gap-1.5 mb-1.5 shrink-0">
-          <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
+      <div className="flex flex-col min-h-0" style={{ flex: "1.1 1 0" }}>
+        <div className="flex items-center gap-2 mb-2 shrink-0 px-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-sky-400 shrink-0" />
           <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
             {indexName} · {units}
           </span>
           {trend?.slope != null && (
             <span className={[
-              "text-[10px] font-mono ml-auto",
-              (trend.p_value ?? 1) < 0.05
-                ? trend.slope > 0 ? "text-red-400" : "text-blue-400"
-                : "text-slate-600",
+              "ml-auto inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded-md border tabular-nums",
+              isSig
+                ? trendUp
+                  ? "text-red-400 bg-red-950/50 border-red-800/50"
+                  : "text-sky-400 bg-sky-950/50 border-sky-800/50"
+                : "text-slate-500 bg-slate-800/50 border-slate-700/50",
             ].join(" ")}>
-              {trend.slope > 0 ? "+" : ""}{trend.slope.toFixed(3)} {trend.units}
+              <span>{trendUp ? "▲" : "▼"}</span>
+              <span>{trend.slope > 0 ? "+" : ""}{trend.slope.toFixed(3)} {trend.units}</span>
             </span>
           )}
         </div>
@@ -367,34 +416,36 @@ export default function SOIComparisonChart({ data, trend, units, indexName }: Pr
         </div>
       </div>
 
-      {/* divider */}
-      <div className="h-px bg-slate-700/60 shrink-0" />
+      {/* divider + season selector */}
+      <div className="flex items-center gap-3 py-2.5 px-1 shrink-0 border-t border-b border-slate-700/50 my-1">
+        <span className="text-[9px] font-semibold text-slate-600 uppercase tracking-wider">Season</span>
+        <div className="flex items-center gap-1">
+          {SEASONS.map((s) => (
+            <button
+              key={s}
+              onClick={() => setSeason(s)}
+              className={[
+                "text-[10px] px-2 py-0.5 rounded-md border transition-all",
+                season === s
+                  ? "bg-violet-700/80 text-white border-violet-600"
+                  : "text-slate-500 border-slate-700 hover:border-slate-500 hover:text-slate-300",
+              ].join(" ")}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+        <span className="ml-auto text-[9px] text-slate-600">z-score normalised · bars = teleconnection</span>
+      </div>
 
       {/* ── SOI panel ─────────────────────────────── */}
       <div className="flex flex-col flex-1 min-h-0">
-        <div className="flex items-center justify-between mb-1.5 shrink-0">
-          <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-violet-500 shrink-0" />
-            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
-              vs ENSO / Niño 3.4
-            </span>
-          </div>
-          <div className="flex items-center gap-1">
-            {SEASONS.map((s) => (
-              <button
-                key={s}
-                onClick={() => setSeason(s)}
-                className={[
-                  "text-[10px] px-1.5 py-0.5 rounded border transition-colors",
-                  season === s
-                    ? "bg-violet-700 text-white border-violet-700"
-                    : "text-slate-500 border-slate-700 hover:border-slate-500 hover:text-slate-300",
-                ].join(" ")}
-              >
-                {s}
-              </button>
-            ))}
-          </div>
+        <div className="flex items-center gap-2 mb-1.5 shrink-0 px-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-violet-500 shrink-0" />
+          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+            vs ENSO / Niño 3.4
+          </span>
+          <span className="text-[9px] text-slate-600 ml-1">({season})</span>
         </div>
         <div className="flex-1 min-h-0">
           <SubChart
@@ -408,34 +459,16 @@ export default function SOIComparisonChart({ data, trend, units, indexName }: Pr
         </div>
       </div>
 
-      {/* divider */}
-      <div className="h-px bg-slate-700/60 shrink-0" />
+      <div className="h-px bg-slate-700/40 shrink-0 mx-1" />
 
       {/* ── IOD panel ─────────────────────────────── */}
       <div className="flex flex-col flex-1 min-h-0">
-        <div className="flex items-center justify-between gap-1.5 mb-1.5 shrink-0">
-          <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-teal-500 shrink-0 " />
-            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
-              vs IOD / DMI
-            </span>
-          </div>
-          <div className="flex items-center gap-1">
-            {SEASONS.map((s) => (
-              <button
-                key={s}
-                onClick={() => setSeason(s)}
-                className={[
-                  "text-[10px] px-1.5 py-0.5 rounded border transition-colors",
-                  season === s
-                    ? "bg-violet-700 text-white border-violet-700"
-                    : "text-slate-500 border-slate-700 hover:border-slate-500 hover:text-slate-300",
-                ].join(" ")}
-              >
-                {s}
-              </button>
-            ))}
-          </div>
+        <div className="flex items-center gap-2 mb-1.5 shrink-0 px-1 mt-2">
+          <span className="w-1.5 h-1.5 rounded-full bg-teal-500 shrink-0" />
+          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+            vs IOD / DMI
+          </span>
+          <span className="text-[9px] text-slate-600 ml-1">({season})</span>
         </div>
         <div className="flex-1 min-h-0">
           <SubChart
@@ -448,11 +481,6 @@ export default function SOIComparisonChart({ data, trend, units, indexName }: Pr
           />
         </div>
       </div>
-
-      {/* legend footnote */}
-      <p className="text-[9px] text-slate-600 text-right shrink-0 -mt-1">
-        All series z-score normalised (σ) · blue = {indexName} · red dashed = trend · bars = teleconnection
-      </p>
     </div>
   );
 }

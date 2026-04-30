@@ -47,6 +47,16 @@ export interface ReturnPeriods {
   rp_100: number | null;
 }
 
+/** GEV distribution parameters fitted to a district's annual time series via scipy MLE. */
+export interface GEVParams {
+  loc: number;          // μ location
+  scale: number;        // σ scale (> 0)
+  shape: number;        // ξ shape (scipy convention: > 0 Fréchet, ≈ 0 Gumbel, < 0 Weibull)
+  n_years: number;
+  period_start: number;
+  period_end: number;
+}
+
 export interface CorrelationInfo {
   r: number | null;
   period: [number, number];
@@ -72,6 +82,7 @@ export interface IndexProfile {
   time_series: TimeSeriesPoint[];
   trend: TrendInfo | null;
   return_periods: ReturnPeriods | null;
+  gev_params: GEVParams | null;
   correlations: Partial<Record<TeleconnectionName | SeasonalSOIKey | SeasonalDMIKey, CorrelationInfo>> | null;
   latest_value: number | null;
   units: string;
