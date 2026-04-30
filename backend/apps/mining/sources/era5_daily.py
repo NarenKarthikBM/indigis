@@ -75,7 +75,7 @@ STAT_CONFIGS = {
 # Short tag for directory paths
 _VAR_SHORT = {
     "2m_temperature":      "t2m",
-    "total_precipitation": "precip",
+    "total_precipitation": "tp",
 }
 
 _NODATA = -9999.0
@@ -118,6 +118,7 @@ class ERA5DailySource:
             .exclude(period_start__isnull=True)
             .values_list("period_start__year", flat=True)
         )
+        print(f"Already processed years for '{self.datasource_slug}': {sorted(processed_years)}")
 
         return [y for y in range(start_year, current_year) if y not in processed_years]
 
@@ -147,6 +148,7 @@ class ERA5DailySource:
         continues with the remaining years.
         """
         ds, variable, pending = self._setup() or (None, None, None)
+        print(f"Pending years to process: {pending}")
         if ds is None:
             return
         target_years = years if years is not None else pending
@@ -190,6 +192,7 @@ class ERA5DailySource:
             return None
 
         years = self.get_periods_to_fetch()
+        print(f"Years pending processing for '{self.datasource_slug}': {years}")
         if not years:
             logger.info("No new years to fetch for '%s'.", self.datasource_slug)
             return None
@@ -436,7 +439,7 @@ class ERA5DailySource:
         from apps.layers.services import convert_to_cog
 
         # Load dataset, process, and close before writing - prevents HDF5 handle leaks
-        with xr.open_dataset(nc_path) as ds:
+        with xr.open_dataset(nc_path, decode_times=False) as ds:
             da = ds[variable]
 
             # CDO aggregated output has a single time step; drop it

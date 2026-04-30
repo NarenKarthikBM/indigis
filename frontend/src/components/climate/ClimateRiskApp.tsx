@@ -5,16 +5,25 @@ import type { ETCCDIIndexName } from "../../types/climate.types";
 
 const INDEX_META: Record<
   ETCCDIIndexName,
-  { desc: string; shortDesc: string; category: "warm" | "cold" }
+  { desc: string; shortDesc: string; category: "warm" | "cold" | "wet" | "dry" }
 > = {
-  TXx:   { shortDesc: "Max Tmax",       desc: "Hottest day of the year",         category: "warm" },
-  TNn:   { shortDesc: "Min Tmin",        desc: "Coldest night of the year",        category: "cold" },
-  TNx:   { shortDesc: "Max Tmin",        desc: "Warmest nights intensity",         category: "warm" },
-  TXn:   { shortDesc: "Min Tmax",        desc: "Coolest day indicator",            category: "cold" },
-  TX90p: { shortDesc: "Warm Days %",     desc: "Days above 90th percentile",       category: "warm" },
-  TN10p: { shortDesc: "Cool Nights %",   desc: "Nights below 10th percentile",     category: "cold" },
-  WSDI:  { shortDesc: "Warm Spells",     desc: "Consecutive warm day spells",      category: "warm" },
-  CSDI:  { shortDesc: "Cold Spells",     desc: "Consecutive cold night spells",    category: "cold" },
+  TXx:    { shortDesc: "Max Tmax",         desc: "Hottest day of the year",               category: "warm" },
+  TNn:    { shortDesc: "Min Tmin",          desc: "Coldest night of the year",              category: "cold" },
+  TNx:    { shortDesc: "Max Tmin",          desc: "Warmest nights intensity",               category: "warm" },
+  TXn:    { shortDesc: "Min Tmax",          desc: "Coolest day indicator",                  category: "cold" },
+  TX90p:  { shortDesc: "Warm Days %",       desc: "Days above 90th percentile",             category: "warm" },
+  TN10p:  { shortDesc: "Cool Nights %",     desc: "Nights below 10th percentile",           category: "cold" },
+  WSDI:   { shortDesc: "Warm Spells",       desc: "Consecutive warm day spells",            category: "warm" },
+  CSDI:   { shortDesc: "Cold Spells",       desc: "Consecutive cold night spells",          category: "cold" },
+  SDII:   { shortDesc: "Daily Intensity",   desc: "Mean intensity on wet days",             category: "wet"  },
+  RX1day: { shortDesc: "Max 1-Day Rain",    desc: "Highest single-day rainfall",            category: "wet"  },
+  RX5day: { shortDesc: "Max 5-Day Rain",    desc: "Heaviest 5-day rainfall total",          category: "wet"  },
+  R10mm:  { shortDesc: "Heavy Rain Days",   desc: "Days with ≥10 mm rainfall",             category: "wet"  },
+  R20mm:  { shortDesc: "V.Heavy Rain Days", desc: "Days with ≥20 mm rainfall",             category: "wet"  },
+  CWD:    { shortDesc: "Wet Spell",         desc: "Longest consecutive wet day run",        category: "wet"  },
+  CDD:    { shortDesc: "Dry Spell",         desc: "Longest consecutive dry day run",        category: "dry"  },
+  R95p:   { shortDesc: "Very Wet Days",     desc: "Rainfall from days > 95th percentile",  category: "wet"  },
+  R99p:   { shortDesc: "Extreme Wet Days",  desc: "Rainfall from days > 99th percentile",  category: "wet"  },
 };
 
 export default function ClimateRiskApp() {
@@ -53,7 +62,7 @@ export default function ClimateRiskApp() {
             </div>
             <span className="font-semibold text-slate-900 tracking-tight text-sm">IndiGIS</span>
             <span className="text-slate-200 select-none">·</span>
-            <span className="text-sm text-slate-400">Heat Extreme Risk Engine</span>
+            <span className="text-sm text-slate-400">Climate Extreme Risk Engine</span>
           </div>
           <div className="flex items-center gap-1.5">
             <Link
@@ -103,7 +112,7 @@ export default function ClimateRiskApp() {
         {/* Stats row */}
         <section className="border-y border-slate-100 py-8 grid grid-cols-2 md:grid-cols-4 gap-8">
           {[
-            { value: "8",       label: "ETCCDI Indices",   sub: `${indicesWithData} with data` },
+            { value: "17",      label: "ETCCDI Indices",   sub: `${indicesWithData} with data` },
             { value: String(maxYears || "35"), label: "Years of Data",    sub: "1990-2025 target" },
             // { value: "",     label: "Districts",         sub: "State-level too" },
             { value: "0.25°",   label: "ERA5 Resolution",   sub: "ECMWF reanalysis" },
@@ -155,12 +164,13 @@ export default function ClimateRiskApp() {
                         <span
                           className={[
                             "text-xs px-1.5 py-0.5 rounded font-medium",
-                            meta?.category === "warm"
-                              ? "bg-red-50 text-red-500"
-                              : "bg-sky-50 text-sky-600",
+                            meta?.category === "warm" ? "bg-red-50 text-red-500"
+                            : meta?.category === "wet"  ? "bg-blue-50 text-blue-600"
+                            : meta?.category === "dry"  ? "bg-amber-50 text-amber-600"
+                            : "bg-sky-50 text-sky-600",
                           ].join(" ")}
                         >
-                          {meta?.category === "warm" ? "warm" : "cold"}
+                          {meta?.category ?? ""}
                         </span>
                       </div>
                       <p className="text-xs text-slate-600 font-medium leading-snug">

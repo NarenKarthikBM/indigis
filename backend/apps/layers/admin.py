@@ -19,6 +19,7 @@ class LayerAdmin(admin.ModelAdmin):
     list_display = ["label", "slug", "category", "layer_type", "is_active"]
     list_filter = ["category__overlay_type", "layer_type", "is_active"]
     search_fields = ["label", "slug"]
+    ordering = ["id"]
     inlines = [RasterAssetInline]
 
 

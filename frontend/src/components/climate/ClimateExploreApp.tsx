@@ -205,7 +205,7 @@ export default function ClimateExploreApp() {
       : "YlOrRd";
 
   const activeIndexMeta = availableIndices.find((i) => i.name === selectedIndex);
-  const isWarm = CATEGORY[selectedIndex] === "warm";
+  const indexCategory = CATEGORY[selectedIndex];
 
   return (
     <div className="flex flex-row h-screen overflow-hidden bg-slate-950">
@@ -224,7 +224,7 @@ export default function ClimateExploreApp() {
               <span className="text-blue-400">Indi</span>
               <span className="text-violet-400">GIS</span>
             </span>
-            <span className="text-[10px] text-slate-600 ml-auto">Heat Extreme Explorer</span>
+            <span className="text-[10px] text-slate-600 ml-auto">Climate Extremes Explorer</span>
           </div>
         </div>
 
@@ -307,9 +307,12 @@ export default function ClimateExploreApp() {
               <span className="font-mono text-sm font-bold text-blue-400">{selectedIndex}</span>
               <span className={[
                 "text-[9px] px-1.5 py-0.5 rounded font-medium",
-                isWarm ? "bg-orange-950/60 text-orange-400" : "bg-sky-950/60 text-sky-400",
+                indexCategory === "warm" ? "bg-orange-950/60 text-orange-400"
+                : indexCategory === "wet"  ? "bg-blue-950/60 text-blue-400"
+                : indexCategory === "dry"  ? "bg-amber-950/60 text-amber-400"
+                : "bg-sky-950/60 text-sky-400",
               ].join(" ")}>
-                {isWarm ? "warm" : "cold"}
+                {indexCategory}
               </span>
             </div>
             <p className="text-[11px] text-slate-500 leading-snug">{activeIndexMeta.description}</p>

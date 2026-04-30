@@ -1,29 +1,49 @@
 import { useStore } from "../../store";
 import type { ETCCDIIndexName } from "../../types/climate.types";
 
-const TIER1: ETCCDIIndexName[] = ["TXx", "TNn", "TNx", "TXn"];
-const TIER2: ETCCDIIndexName[] = ["TX90p", "TN10p", "WSDI", "CSDI"];
+const TIER1_TEMP: ETCCDIIndexName[] = ["TXx", "TNn", "TNx", "TXn"];
+const TIER2_TEMP: ETCCDIIndexName[] = ["TX90p", "TN10p", "WSDI", "CSDI"];
+const TIER1_PRECIP: ETCCDIIndexName[] = ["SDII", "RX1day", "RX5day", "R10mm", "R20mm", "CWD", "CDD"];
+const TIER2_PRECIP: ETCCDIIndexName[] = ["R95p", "R99p"];
 
 const FULL_NAMES: Record<ETCCDIIndexName, string> = {
-  TXx:   "Max of Daily Max Temp",
-  TNn:   "Min of Daily Min Temp",
-  TNx:   "Max of Daily Min Temp",
-  TXn:   "Min of Daily Max Temp",
-  TX90p: "Warm Days (% > 90th pct)",
-  TN10p: "Cool Nights (% < 10th pct)",
-  WSDI:  "Warm Spell Duration Index",
-  CSDI:  "Cold Spell Duration Index",
+  TXx:    "Max of Daily Max Temp",
+  TNn:    "Min of Daily Min Temp",
+  TNx:    "Max of Daily Min Temp",
+  TXn:    "Min of Daily Max Temp",
+  TX90p:  "Warm Days (% > 90th pct)",
+  TN10p:  "Cool Nights (% < 10th pct)",
+  WSDI:   "Warm Spell Duration Index",
+  CSDI:   "Cold Spell Duration Index",
+  SDII:   "Simple Daily Intensity Index",
+  RX1day: "Max 1-Day Precipitation",
+  RX5day: "Max 5-Day Precipitation",
+  R10mm:  "Heavy Precipitation Days (≥10mm)",
+  R20mm:  "Very Heavy Precipitation Days (≥20mm)",
+  CWD:    "Consecutive Wet Days",
+  CDD:    "Consecutive Dry Days",
+  R95p:   "Very Wet Days (> 95th pct)",
+  R99p:   "Extremely Wet Days (> 99th pct)",
 };
 
-export const CATEGORY: Record<ETCCDIIndexName, "warm" | "cold"> = {
-  TXx:   "warm",
-  TNn:   "cold",
-  TNx:   "warm",
-  TXn:   "cold",
-  TX90p: "warm",
-  TN10p: "cold",
-  WSDI:  "warm",
-  CSDI:  "cold",
+export const CATEGORY: Record<ETCCDIIndexName, "warm" | "cold" | "wet" | "dry"> = {
+  TXx:    "warm",
+  TNn:    "cold",
+  TNx:    "warm",
+  TXn:    "cold",
+  TX90p:  "warm",
+  TN10p:  "cold",
+  WSDI:   "warm",
+  CSDI:   "cold",
+  SDII:   "wet",
+  RX1day: "wet",
+  RX5day: "wet",
+  R10mm:  "wet",
+  R20mm:  "wet",
+  CWD:    "wet",
+  CDD:    "dry",
+  R95p:   "wet",
+  R99p:   "wet",
 };
 
 export default function IndexSelector() {
@@ -34,10 +54,17 @@ export default function IndexSelector() {
   const isAvailable = (name: ETCCDIIndexName) =>
     availableIndices.find((i) => i.name === name)?.available_years.length ?? 0 > 0;
 
+  const dotColor = (name: ETCCDIIndexName) => {
+    const cat = CATEGORY[name];
+    if (cat === "warm") return "bg-orange-400";
+    if (cat === "cold") return "bg-sky-400";
+    if (cat === "wet")  return "bg-blue-400";
+    return "bg-amber-400"; // dry
+  };
+
   const renderPill = (name: ETCCDIIndexName) => {
     const active = selectedIndex === name;
     const available = isAvailable(name);
-    const isWarm = CATEGORY[name] === "warm";
 
     return (
       <button
@@ -55,10 +82,7 @@ export default function IndexSelector() {
       >
         <div className="flex items-center gap-1.5 mb-0.5">
           <span
-            className={[
-              "w-1.5 h-1.5 rounded-full shrink-0",
-              isWarm ? "bg-orange-400" : "bg-sky-400",
-            ].join(" ")}
+            className={["w-1.5 h-1.5 rounded-full shrink-0", dotColor(name)].join(" ")}
           />
           <span
             className={[
@@ -84,14 +108,20 @@ export default function IndexSelector() {
   return (
     <div className="space-y-3">
       <div>
-        <p className="text-[9px] text-slate-600 uppercase tracking-widest mb-1.5">Core</p>
-        <div className="grid grid-cols-2 gap-1">{TIER1.map(renderPill)}</div>
+        <p className="text-[9px] text-slate-600 uppercase tracking-widest mb-1.5">Temperature · Core</p>
+        <div className="grid grid-cols-2 gap-1">{TIER1_TEMP.map(renderPill)}</div>
       </div>
       <div>
-        <p className="text-[9px] text-slate-600 uppercase tracking-widest mb-1.5">
-          Baseline-dependent
-        </p>
-        <div className="grid grid-cols-2 gap-1">{TIER2.map(renderPill)}</div>
+        <p className="text-[9px] text-slate-600 uppercase tracking-widest mb-1.5">Temperature · Baseline</p>
+        <div className="grid grid-cols-2 gap-1">{TIER2_TEMP.map(renderPill)}</div>
+      </div>
+      <div>
+        <p className="text-[9px] text-slate-600 uppercase tracking-widest mb-1.5">Precipitation · Core</p>
+        <div className="grid grid-cols-2 gap-1">{TIER1_PRECIP.map(renderPill)}</div>
+      </div>
+      <div>
+        <p className="text-[9px] text-slate-600 uppercase tracking-widest mb-1.5">Precipitation · Baseline</p>
+        <div className="grid grid-cols-2 gap-1">{TIER2_PRECIP.map(renderPill)}</div>
       </div>
     </div>
   );

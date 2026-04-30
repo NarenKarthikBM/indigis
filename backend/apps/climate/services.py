@@ -130,6 +130,109 @@ ETCCDI_INDICES = {
         "baseline_pctl": 10,
         "baseline_stat": "daily_minimum",
     },
+    "SDII": {
+        "tier": 1,
+        "cds_stat": "daily_sum",
+        "variable": "total_precipitation",
+        "nc_var": "tp",
+        "cdo_op": "eca_sdii",
+        "label": "Simple Daily Intensity Index",
+        "units": "mm/day",
+        "colormap": "Blues",
+        "description": "Annual total precipitation divided by the number of wet days (PRCP ≥ 1.0 mm)",
+    },
+    "RX1day": {
+        "tier": 1,
+        "cds_stat": "daily_sum",
+        "variable": "total_precipitation",
+        "nc_var": "tp",
+        "cdo_op": "eca_rx1day",
+        "label": "Max 1-Day Precipitation",
+        "units": "mm",
+        "colormap": "Purples",
+        "description": "Annual maximum 1-day precipitation amount",
+    },
+    "RX5day": {
+        "tier": 1,
+        "cds_stat": "daily_sum",
+        "variable": "total_precipitation",
+        "nc_var": "tp",
+        "cdo_op": "eca_rx5day",
+        "label": "Max 5-Day Precipitation",
+        "units": "mm",
+        "colormap": "Purples",
+        "description": "Annual maximum consecutive 5-day precipitation amount",
+    },
+    "R10mm": {
+        "tier": 1,
+        "cds_stat": "daily_sum",
+        "variable": "total_precipitation",
+        "nc_var": "tp",
+        "cdo_op": "eca_r10mm",
+        "label": "Heavy Precipitation Days",
+        "units": "days",
+        "colormap": "YlOrBr",
+        "description": "Annual count of days when daily precipitation ≥ 10 mm",
+    },
+    "R20mm": {
+        "tier": 1,
+        "cds_stat": "daily_sum",
+        "variable": "total_precipitation",
+        "nc_var": "tp",
+        "cdo_op": "eca_r20mm",
+        "label": "Very Heavy Precipitation Days",
+        "units": "days",
+        "colormap": "YlOrBr",
+        "description": "Annual count of days when daily precipitation ≥ 20 mm",
+    },
+    "CWD": {
+        "tier": 1,
+        "cds_stat": "daily_sum",
+        "variable": "total_precipitation",
+        "nc_var": "tp",
+        "cdo_op": "eca_cwd",
+        "label": "Consecutive Wet Days",
+        "units": "days",
+        "colormap": "GnBu",
+        "description": "Maximum number of consecutive days with daily precipitation ≥ 1.0 mm",
+    },
+    "CDD": {
+        "tier": 1,
+        "cds_stat": "daily_sum",
+        "variable": "total_precipitation",
+        "nc_var": "tp",
+        "cdo_op": "eca_cdd",
+        "label": "Consecutive Dry Days",
+        "units": "days",
+        "colormap": "YlOrBr",
+        "description": "Maximum number of consecutive days with daily precipitation < 1.0 mm",
+    },
+    "R95p": {
+        "tier": 2,
+        "cds_stat": "daily_sum",
+        "variable": "total_precipitation",
+        "nc_var": "tp",
+        "cdo_op": "eca_r95p",
+        "label": "Very Wet Days",
+        "units": "mm",
+        "colormap": "PuBu",
+        "description": "Annual total precipitation from days exceeding the 95th percentile of wet days",
+        "baseline_pctl": 95,
+        "baseline_stat": "daily_sum",
+    },
+    "R99p": {
+        "tier": 2,
+        "cds_stat": "daily_sum",
+        "variable": "total_precipitation",
+        "nc_var": "tp",
+        "cdo_op": "eca_r99p",
+        "label": "Extremely Wet Days",
+        "units": "mm",
+        "colormap": "PuBu",
+        "description": "Annual total precipitation from days exceeding the 99th percentile of wet days",
+        "baseline_pctl": 99,
+        "baseline_stat": "daily_sum",
+    },
 }
 
 # ---------------------------------------------------------------------------
@@ -341,7 +444,7 @@ def _nc_to_cog(nc_path: str, cog_path: str, variable: str) -> None:
     import rioxarray  # noqa: F401
     from apps.layers.services import convert_to_cog
 
-    ds = xr.open_dataset(nc_path)
+    ds = xr.open_dataset(nc_path, decode_times=False)
     if variable not in ds:
         data_vars = [v for v in ds.data_vars]
         if len(data_vars) == 1:
@@ -354,8 +457,9 @@ def _nc_to_cog(nc_path: str, cog_path: str, variable: str) -> None:
                 variable = etccdi_vars[0]
                 logger.debug("Variable auto-detected as '%s' in %s", variable, nc_path)
             else:
-                ds.close()
-                raise ValueError(f"Variable '{variable}' not found in {nc_path}. Available: {data_vars}")
+                # CDO ECA operators (e.g. eca_rx5day) put the primary quantity first
+                variable = data_vars[0]
+                logger.debug("Variable auto-detected (first) as '%s' in %s", variable, nc_path)
 
     da = ds[variable]
 
@@ -630,39 +734,25 @@ def get_or_create_seasonal_correlation_layer(etccdi_index: str, tc_name: str, se
 
 def get_teleconnection_data(tc_name: str, years: list) -> dict:
     """
-    Load yearly teleconnection values for the given years from a JSON file.
+    Load yearly teleconnection values for the given years.
 
-    Expected file location: TELECONNECTION_DIR/{tc_name.lower()}.json
-    Expected JSON format::
+    For indices with seasonal data (SOI, IOD), the annual value is derived as
+    the mean across all available seasons for that year from
+    SEASONAL_TELECONNECTION_DATA.  This avoids using pre-computed yearly means
+    that may differ in methodology from the seasonal values.
 
-        {
-            "name": "SOI",
-            "yearly": {
-                "1990": -0.52,
-                "1991": 0.34,
-                ...
-            },
-            "monthly": {
-                "1990-01": 0.12,
-                ...
-            }
-        }
-
-    Returns a ``{year: float}`` dict for years that have data.
+    Returns a ``{year: float}`` dict for years that have data in all seasons.
     """
-    # path = os.path.join(TELECONNECTION_DIR, f"{tc_name.lower()}.json")
-    # if not os.path.exists(path):
-    #     raise FileNotFoundError(
-    #         f"Teleconnection data not found: {path}. "
-    #         f"Create a JSON file with a 'yearly' dict keyed by year strings. "
-    #         f"See TELECONNECTION_DIR ({TELECONNECTION_DIR}) for location."
-    #     )
-
-    # with open(path) as fh:
-    #     data = json.load(fh)
+    if tc_name in SEASONAL_TELECONNECTION_DATA:
+        seasonal = SEASONAL_TELECONNECTION_DATA[tc_name]
+        result = {}
+        for year in years:
+            season_vals = [v for season_data in seasonal.values() if (v := season_data.get(year)) is not None]
+            if season_vals:
+                result[int(year)] = float(sum(season_vals) / len(season_vals))
+        return result
 
     data = TELECONNECTION_INDICES.get(tc_name)
-
     yearly = data.get("yearly", {})
     result = {}
     for year in years:
@@ -715,13 +805,20 @@ def compute_etccdi_index_service(index_name: str, year: int, countdown: int = 0)
     os.makedirs(os.path.dirname(cog_path), exist_ok=True)
 
     with tempfile.TemporaryDirectory(prefix=f"etccdi_{index_name}_{year}_") as tmpdir:
-        # Convert K → C for temperature inputs
-        celsius_nc = os.path.join(tmpdir, "celsius.nc")
-        _cdo_run("subc,273.15", source_nc, celsius_nc)
+        is_precip = variable == "total_precipitation"
+        if is_precip:
+            # ERA5 total_precipitation is in m/day; CDO ECA operators expect mm/day
+            work_nc = os.path.join(tmpdir, "precip_mm.nc")
+            _cdo_run("mulc,1000", source_nc, work_nc)
+        else:
+            # Convert K → C for temperature inputs
+            work_nc = os.path.join(tmpdir, "celsius.nc")
+            _cdo_run("subc,273.15", source_nc, work_nc)
 
         if tier == 1:
             result_nc = os.path.join(tmpdir, "result.nc")
-            _cdo_run(cdo_op, celsius_nc, result_nc)
+            # cdo_op may be a space-separated CDO chain (e.g. "-yearsum -setrtomiss,-1,0.9999")
+            _cdo_run(*cdo_op.split(), work_nc, result_nc)
         else:
             # Tier 2: requires baseline percentile
             pctl = cfg["baseline_pctl"]
@@ -733,7 +830,7 @@ def compute_etccdi_index_service(index_name: str, year: int, countdown: int = 0)
                     "Run: python manage.py compute_baseline"
                 )
             result_nc = os.path.join(tmpdir, "result.nc")
-            _cdo_run(cdo_op, celsius_nc, baseline_nc, result_nc)
+            _cdo_run(*cdo_op.split(), work_nc, baseline_nc, result_nc)
 
         # Archive result NC alongside the COG for downstream CDO use (e.g. timcor)
         archive_nc = get_etccdi_nc_path(index_name, year)
@@ -779,12 +876,15 @@ def compute_baseline_percentiles_service(
     pctl: int,
     start_year: int = 1991,
     end_year: int = 2020,
+    variable: str = "2m_temperature",
 ) -> str:
     """
     Merge ERA5 daily NC files for baseline years, compute calendar-day percentile,
     and save to BASELINE_DIR. Returns path to the baseline NC.
+
+    For temperature (``2m_temperature``): converts K→C before computing percentile.
+    For precipitation (``total_precipitation``): converts m→mm before computing percentile.
     """
-    variable = "2m_temperature"
     os.makedirs(BASELINE_DIR, exist_ok=True)
     output_nc = get_baseline_nc_path(cds_stat, pctl)
 
@@ -795,7 +895,7 @@ def compute_baseline_percentiles_service(
         if os.path.exists(p):
             nc_files.append(p)
         else:
-            logger.warning("Missing baseline year %d for %s - skipping", year, cds_stat)
+            logger.warning("Missing baseline year %d for %s/%s - skipping", year, variable, cds_stat)
 
     if len(nc_files) < 10:
         raise RuntimeError(
@@ -803,23 +903,30 @@ def compute_baseline_percentiles_service(
             "Ensure ERA5 data is archived."
         )
 
-    with tempfile.TemporaryDirectory(prefix=f"baseline_{cds_stat}_") as tmpdir:
-        # Merge all years into one file, then convert K → C
-        merged_k = os.path.join(tmpdir, "merged_kelvin.nc")
-        merged_c = os.path.join(tmpdir, "merged_celsius.nc")
-        _cdo_run("mergetime", *nc_files, merged_k)
-        _cdo_run("subc,273.15", merged_k, merged_c)
+    is_precip = variable == "total_precipitation"
 
-        # Compute calendar-day percentile requires min+max reference files
+    with tempfile.TemporaryDirectory(prefix=f"baseline_{cds_stat}_") as tmpdir:
+        merged_raw = os.path.join(tmpdir, "merged_raw.nc")
+        merged_work = os.path.join(tmpdir, "merged_work.nc")
+        _cdo_run("mergetime", *nc_files, merged_raw)
+
+        if is_precip:
+            # ERA5 precipitation is in m/day; convert to mm/day
+            _cdo_run("mulc,1000", merged_raw, merged_work)
+        else:
+            # Convert K → C for temperature
+            _cdo_run("subc,273.15", merged_raw, merged_work)
+
+        # Compute calendar-day percentile (requires min+max reference files)
         min_nc = os.path.join(tmpdir, "ydaymin.nc")
         max_nc = os.path.join(tmpdir, "ydaymax.nc")
-        _cdo_run("ydaymin", merged_c, min_nc)
-        _cdo_run("ydaymax", merged_c, max_nc)
-        _cdo_run(f"ydaypctl,{pctl}", merged_c, min_nc, max_nc, output_nc)
+        _cdo_run("ydaymin", merged_work, min_nc)
+        _cdo_run("ydaymax", merged_work, max_nc)
+        _cdo_run(f"ydaypctl,{pctl}", merged_work, min_nc, max_nc, output_nc)
 
     logger.info(
-        "Baseline %dth percentile for %s written to %s (%d years)",
-        pctl, cds_stat, output_nc, len(nc_files),
+        "Baseline %dth percentile for %s/%s written to %s (%d years)",
+        pctl, variable, cds_stat, output_nc, len(nc_files),
     )
     return output_nc
 

@@ -1,6 +1,8 @@
 export type ETCCDIIndexName =
   | "TXx" | "TNn" | "TNx" | "TXn"
-  | "TX90p" | "TN10p" | "WSDI" | "CSDI";
+  | "TX90p" | "TN10p" | "WSDI" | "CSDI"
+  | "SDII" | "RX1day" | "RX5day" | "R10mm" | "R20mm" | "CWD" | "CDD"
+  | "R95p" | "R99p";
 
 export type TeleconnectionName = "SOI" | "MEI" | "DMI";
 export type SeasonalSOISeason = "DJF" | "MAM" | "JJA" | "SON";

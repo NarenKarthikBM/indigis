@@ -46,7 +46,7 @@ docker compose exec backend python manage.py register_layer \
   --slug=dtm --label="Digital Terrain Model" --group=core \
   --cog-url=https://example.com/dtm.tif --colormap=terrain --min=0 --max=5000
 
-# Heat Extreme Risk Engine - run after ERA5 data is archived in /data/era5_nc/
+# Climate Extreme Risk Engine - run after ERA5 data is archived in /data/era5_nc/
 docker compose exec backend python manage.py compute_baseline   # 1991-2020 percentiles (Tier 2)
 docker compose exec backend python manage.py compute_etccdi \
   --indices TXx,TNn,TNx,TXn --start-year 1990 --end-year 2024

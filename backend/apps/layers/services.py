@@ -161,7 +161,7 @@ def inspect_netcdf(path: str) -> list[dict]:
     """Return a list of non-coordinate variables from a NetCDF file."""
     import xarray as xr
 
-    ds = xr.open_dataset(path)
+    ds = xr.open_dataset(path, decode_times=False)
     results = []
     for name, da in ds.data_vars.items():
         results.append(
@@ -186,7 +186,7 @@ def extract_nc_variable_to_tiffs(nc_path: str, variable: str, out_dir: str) -> l
     import xarray as xr
     import rioxarray  # noqa: F401 - registers .rio accessor
 
-    ds = xr.open_dataset(nc_path)
+    ds = xr.open_dataset(nc_path, decode_times=False)
     os.makedirs(out_dir, exist_ok=True)
 
     da = ds[variable]

@@ -8,13 +8,10 @@ Teleconnection data must be provided as JSON files at TELECONNECTION_DIR
 Expected JSON format::
 
     {
-        "name": "SOI",
-        "yearly": {
-            "1990": -0.52,
-            "1991":  0.34,
-            "1992":  1.12,
-            ...
-        }
+         "DJF": {"1990": -0.52, ...},
+        "MAM": {"1990":  0.34, ...},
+        "JJA": {"1990":  1.12, ...},
+        "SON": {"1990":  1.12, ...}
     }
 
 Seasonal SOI data (nino_seasonal.json) format::
@@ -22,7 +19,8 @@ Seasonal SOI data (nino_seasonal.json) format::
     {
         "DJF": {"1990": -0.52, ...},
         "MAM": {"1990":  0.34, ...},
-        "JJAS": {"1990":  1.12, ...}
+        "JJA": {"1990":  1.12, ...},
+        "SON": {"1990":  1.12, ...}
     }
 
 Usage:
@@ -95,18 +93,24 @@ class Command(BaseCommand):
                 f"Valid: {list(TELECONNECTION_INDICES)}"
             )
 
-        if do_seasonal and not SOI_SEASONS:
-            raise CommandError("No seasonal SOI data available in services.py SEASONAL_SOI.")
+        from apps.climate.services import SEASONAL_TELECONNECTION_DATA
+
+        seasonal_tcs = [t for t in teleconnections if t in SEASONAL_TELECONNECTION_DATA]
+
+        if do_seasonal and not seasonal_tcs:
+            raise CommandError(
+                f"None of the specified teleconnections {teleconnections} have seasonal data. "
+                f"Available: {list(SEASONAL_TELECONNECTION_DATA)}"
+            )
 
         if do_seasonal:
-            if teleconnections[0] == "SOI":
-                unknown_seasons = [s for s in seasons if s not in SOI_SEASONS]      
-            else:
-                unknown_seasons = [s for s in seasons if s not in IOD_SEASONS]      
-            if unknown_seasons:
-                raise CommandError(
-                    f"Unknown seasons: {unknown_seasons}. Available: {SOI_SEASONS}"
-                )
+            for tc in seasonal_tcs:
+                available = list(SEASONAL_TELECONNECTION_DATA[tc].keys())
+                unknown_seasons = [s for s in seasons if s not in available]
+                if unknown_seasons:
+                    raise CommandError(
+                        f"Unknown seasons for {tc}: {unknown_seasons}. Available: {available}"
+                    )
 
         countdown = 0
 
@@ -143,38 +147,38 @@ class Command(BaseCommand):
                         )
                         countdown += stagger
 
-        # Seasonal SOI correlations
+        # Seasonal correlations (SOI, IOD, or any TC with seasonal data)
         if do_seasonal:
-            total_seasonal = len(indices) * len(seasons)
-            teleconnection_name = teleconnections[0]
+            total_seasonal = len(indices) * len(seasons) * len(seasonal_tcs)
             self.stdout.write(
-                f"Computing {total_seasonal} seasonal {teleconnection_name} correlation rasters "
-                f"({len(indices)} indices × {len(seasons)} seasons: {seasons})"
+                f"Computing {total_seasonal} seasonal correlation rasters "
+                f"({len(indices)} indices × {len(seasons)} seasons × {len(seasonal_tcs)} teleconnections: {seasonal_tcs})"
             )
-            for season in seasons:
-                for index_name in indices:
-                    label = f"{index_name} × {teleconnection_name}/{season}"
-                    if sync_mode:
-                        from apps.climate.services import compute_seasonal_correlation_raster_service
-                        self.stdout.write(f"  {label} (sync)…")
-                        try:
-                            compute_seasonal_correlation_raster_service(index_name, teleconnection_name, season)
-                            self.stdout.write(self.style.SUCCESS(f"  {label}: done"))
-                        except FileNotFoundError as exc:
-                            self.stdout.write(
-                                self.style.WARNING(f"  {label}: skipped - {exc}")
+            for teleconnection_name in seasonal_tcs:
+                for season in seasons:
+                    for index_name in indices:
+                        label = f"{index_name} × {teleconnection_name}/{season}"
+                        if sync_mode:
+                            from apps.climate.services import compute_seasonal_correlation_raster_service
+                            self.stdout.write(f"  {label} (sync)…")
+                            try:
+                                compute_seasonal_correlation_raster_service(index_name, teleconnection_name, season)
+                                self.stdout.write(self.style.SUCCESS(f"  {label}: done"))
+                            except FileNotFoundError as exc:
+                                self.stdout.write(
+                                    self.style.WARNING(f"  {label}: skipped - {exc}")
+                                )
+                            except Exception as exc:
+                                self.stdout.write(self.style.ERROR(f"  {label}: FAILED - {exc}"))
+                        else:
+                            from apps.climate.tasks import compute_seasonal_correlation_raster
+                            compute_seasonal_correlation_raster.apply_async(
+                                args=[index_name, teleconnection_name, season],
+                                countdown=countdown,
                             )
-                        except Exception as exc:
-                            self.stdout.write(self.style.ERROR(f"  {label}: FAILED - {exc}"))
-                    else:
-                        from apps.climate.tasks import compute_seasonal_correlation_raster
-                        compute_seasonal_correlation_raster.apply_async(
-                            args=[index_name, teleconnection_name, season],
-                            countdown=countdown,
-                        )
-                        self.stdout.write(
-                            f"  Queued {label} (countdown={countdown}s)"
-                        )
-                        countdown += stagger
+                            self.stdout.write(
+                                f"  Queued {label} (countdown={countdown}s)"
+                            )
+                            countdown += stagger
 
         self.stdout.write(self.style.SUCCESS("Done"))
