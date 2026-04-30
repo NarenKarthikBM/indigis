@@ -1,8 +1,9 @@
 """Climate risk API views."""
+import gzip
 import json
 import logging
 
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
@@ -331,6 +332,144 @@ def district_profile(request, district_code: str):
             "state_code": district.state.code,
         },
         "indices": profile_data,
+    })
+
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/climate/rankings/?index=TXx&metric=trend_slope&level=district&limit=20
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/climate/boundaries/?level=district|state
+# ---------------------------------------------------------------------------
+
+@api_view(["GET"])
+def boundaries(request):
+    """
+    Return GeoJSON geometries only (no climate values) for a given level.
+    All simplification and GeoJSON serialisation is done in PostgreSQL to
+    avoid loading heavy geometry objects into Python.
+    Intended to be fetched once per level and cached long-term in the frontend.
+    """
+    from django.db import connection
+
+    level = request.GET.get("level", "district")
+
+    if level == "state":
+        sql = """
+            SELECT
+                s.code,
+                s.name,
+                ST_AsGeoJSON(ST_SimplifyPreserveTopology(s.geometry, 0.01)) AS geojson
+            FROM boundaries_state s
+            ORDER BY s.name
+        """
+        with connection.cursor() as cursor:
+            cursor.execute(sql)
+            rows = cursor.fetchall()
+
+        features = [
+            {
+                "type": "Feature",
+                "geometry": json.loads(geojson),
+                "properties": {"code": code, "name": name},
+            }
+            for code, name, geojson in rows
+        ]
+    else:
+        sql = """
+            SELECT
+                d.code,
+                d.name,
+                s.name  AS state_name,
+                s.code  AS state_code,
+                ST_AsGeoJSON(ST_SimplifyPreserveTopology(d.geometry, 0.01)) AS geojson
+            FROM boundaries_district d
+            INNER JOIN boundaries_state s ON d.state_id = s.id
+            ORDER BY d.name
+        """
+        with connection.cursor() as cursor:
+            cursor.execute(sql)
+            rows = cursor.fetchall()
+
+        features = [
+            {
+                "type": "Feature",
+                "geometry": json.loads(geojson),
+                "properties": {
+                    "code": code,
+                    "name": name,
+                    "state": state_name,
+                    "state_code": state_code,
+                },
+            }
+            for code, name, state_name, state_code, geojson in rows
+        ]
+
+    body = json.dumps({"type": "FeatureCollection", "features": features}, separators=(",", ":"))
+
+    # Gzip if client supports it — boundary GeoJSON can be several MB
+    accept_encoding = request.META.get("HTTP_ACCEPT_ENCODING", "")
+    if "gzip" in accept_encoding:
+        compressed = gzip.compress(body.encode("utf-8"), compresslevel=6)
+        response = HttpResponse(compressed, content_type="application/json")
+        response["Content-Encoding"] = "gzip"
+        response["Content-Length"] = len(compressed)
+    else:
+        response = HttpResponse(body, content_type="application/json")
+
+    response["Cache-Control"] = "public, max-age=86400"
+    return response
+
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/climate/values/?index=TXx&metric=trend_slope&level=district
+# ---------------------------------------------------------------------------
+
+@api_view(["GET"])
+def choropleth_values(request):
+    """
+    Return {code: value} dict without geometry. Much lighter than choropleth/.
+    """
+    index = request.GET.get("index", "TXx")
+    metric = request.GET.get("metric", "trend_slope")
+    level = request.GET.get("level", "district")
+    year = request.GET.get("year")
+
+    if index not in ETCCDI_INDICES:
+        return Response({"error": f"Unknown index: {index}"}, status=400)
+
+    layer_slug = _get_layer_slug(index, metric)
+    if not layer_slug:
+        return Response({"error": f"Unknown metric: {metric}"}, status=400)
+
+    asset = _latest_asset(layer_slug, period_label=year)
+    if asset is None:
+        return Response({"values": {}, "meta": {"message": "No data available"}})
+
+    if level == "state":
+        from apps.stats.models import RasterStateStats
+        values = {
+            s.state.code: s.mean
+            for s in RasterStateStats.objects.filter(raster_asset=asset).select_related("state")
+        }
+    else:
+        from apps.stats.models import RasterDistrictStats
+        values = {
+            s.district.code: s.mean
+            for s in RasterDistrictStats.objects.filter(raster_asset=asset).select_related("district")
+        }
+
+    return Response({
+        "values": values,
+        "meta": {
+            "index": index,
+            "metric": metric,
+            "level": level,
+            "asset_id": asset.pk,
+            "period_label": asset.period_label,
+            "parameters": asset.parameters,
+        },
     })
 
 

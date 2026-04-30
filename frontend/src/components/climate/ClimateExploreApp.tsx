@@ -177,7 +177,8 @@ export default function ClimateExploreApp() {
   const selectedDistrictCode = useStore((s) => s.selectedDistrictCode);
   const selectedIndex = useStore((s) => s.selectedIndex);
   const selectedMetric = useStore((s) => s.selectedMetric);
-  const choroData = useStore((s) => s.choroData);
+  const boundaryData = useStore((s) => s.boundaryData);
+  const activeValues = useStore((s) => s.activeValues);
   const availableIndices = useStore((s) => s.availableIndices);
   const fetchDistrictProfile = useStore((s) => s.fetchDistrictProfile);
 
@@ -189,23 +190,24 @@ export default function ClimateExploreApp() {
 
   const matches = useMemo(() => {
     if (!searchQuery.trim()) return [];
-    return (choroData?.features ?? [])
+    return (boundaryData?.features ?? [])
       .filter((f) => f.properties.name.toLowerCase().includes(searchQuery.toLowerCase()))
       .slice(0, 8);
-  }, [searchQuery, choroData]);
+  }, [searchQuery, boundaryData]);
 
-  const values = choroData?.features
-    .map((f) => f.properties.value)
-    .filter((v): v is number => v !== null) ?? [];
-  const minVal = values.length ? Math.min(...values) : 0;
-  const maxVal = values.length ? Math.max(...values) : 1;
+  const legendVals = activeValues
+    ? Object.values(activeValues).filter((v): v is number => v !== null)
+    : [];
+  const minVal = legendVals.length ? Math.min(...legendVals) : 0;
+  const maxVal = legendVals.length ? Math.max(...legendVals) : 1;
+  const activeIndexMeta = availableIndices.find((i) => i.name === selectedIndex);
+  const indexCategory = CATEGORY[selectedIndex];
   const colormap =
     selectedMetric === "trend_slope" || selectedMetric.startsWith("corr_")
       ? "RdYlBu_r"
+      : (indexCategory === "wet" || indexCategory === "dry")
+      ? "Blues"
       : "YlOrRd";
-
-  const activeIndexMeta = availableIndices.find((i) => i.name === selectedIndex);
-  const indexCategory = CATEGORY[selectedIndex];
 
   return (
     <div className="flex flex-row h-screen overflow-hidden bg-slate-950">
@@ -345,7 +347,7 @@ export default function ClimateExploreApp() {
         </div>
 
         {/* Floating color scale legend */}
-        {values.length > 0 && (
+        {legendVals.length > 0 && (
           <div className="absolute bottom-6 right-5 z-[800] pointer-events-none">
             <div className="bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-xl px-4 py-2.5 shadow-xl flex flex-col items-center gap-1.5 min-w-[200px]">
               <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-slate-500 leading-none">

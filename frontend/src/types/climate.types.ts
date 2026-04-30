@@ -97,6 +97,43 @@ export interface RankingRow {
   value: number | null;
 }
 
+// ------------------------------------------------------------------
+// Lightweight boundary types (no climate values embedded)
+// ------------------------------------------------------------------
+
+export interface BoundaryFeatureProperties {
+  code: string;
+  name: string;
+  state?: string;
+  state_code?: string;
+}
+
+export interface BoundaryFeature {
+  type: "Feature";
+  geometry: Record<string, unknown>;
+  properties: BoundaryFeatureProperties;
+}
+
+export interface BoundaryFeatureCollection {
+  type: "FeatureCollection";
+  features: BoundaryFeature[];
+}
+
+/** code → mean value (null when no data for that region) */
+export type ValuesMap = Record<string, number | null>;
+
+export interface ValuesResponse {
+  values: ValuesMap;
+  meta: {
+    index: string;
+    metric: string;
+    level: string;
+    asset_id: number;
+    period_label: string;
+    parameters: Record<string, unknown>;
+  };
+}
+
 export interface ChoroplethFeatureProperties {
   code: string;
   name: string;

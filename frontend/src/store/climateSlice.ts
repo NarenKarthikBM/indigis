@@ -4,10 +4,26 @@ import type {
   ETCCDIIndexName,
   ClimateMetric,
   ClimateLevel,
-  ChoroplethResponse,
+  BoundaryFeatureCollection,
+  ValuesMap,
   DistrictProfile,
   RankingRow,
 } from "../types/climate.types";
+
+// ---------------------------------------------------------------------------
+// Module-level caches — not reactive, never trigger re-renders
+// ---------------------------------------------------------------------------
+const _boundaryCache: Partial<Record<ClimateLevel, BoundaryFeatureCollection>> = {};
+const _valuesCache = new Map<string, ValuesMap>();
+
+function valuesKey(
+  index: string,
+  metric: string,
+  level: string,
+  year: number | undefined
+): string {
+  return `${index}|${metric}|${level}|${year ?? ""}`;
+}
 
 export interface ClimateState {
   // Selections
@@ -19,7 +35,10 @@ export interface ClimateState {
 
   // Data
   availableIndices: ETCCDIIndex[];
-  choroData: ChoroplethResponse | null;
+  /** Current level's boundary GeoJSON (geometry only, no values) */
+  boundaryData: BoundaryFeatureCollection | null;
+  /** Current displayed values: code → mean */
+  activeValues: ValuesMap | null;
   districtProfile: DistrictProfile | null;
   rankings: RankingRow[];
 
@@ -51,7 +70,8 @@ export const createClimateSlice = (
   selectedYear: 2025,
 
   availableIndices: [],
-  choroData: null,
+  boundaryData: null,
+  activeValues: null,
   districtProfile: null,
   rankings: [],
 
@@ -59,14 +79,16 @@ export const createClimateSlice = (
   profileLoading: false,
   rankingsLoading: false,
 
+  // Setters no longer null boundary/values — old data stays visible while
+  // new data loads, avoiding a blank-map flash.
   setSelectedIndex: (index) =>
-    set(() => ({ selectedIndex: index, choroData: null, rankings: [] })),
+    set(() => ({ selectedIndex: index, rankings: [] })),
 
   setSelectedMetric: (metric) =>
-    set(() => ({ selectedMetric: metric, choroData: null, rankings: [] })),
+    set(() => ({ selectedMetric: metric, rankings: [] })),
 
   setSelectedLevel: (level) =>
-    set(() => ({ selectedLevel: level, choroData: null, rankings: [] })),
+    set(() => ({ selectedLevel: level, rankings: [] })),
 
   setSelectedDistrict: (code) =>
     set(() => ({
@@ -75,7 +97,7 @@ export const createClimateSlice = (
     })),
 
   setSelectedYear: (year) =>
-    set(() => ({ selectedYear: year, choroData: null })),
+    set(() => ({ selectedYear: year })),
 
   fetchAvailableIndices: async () => {
     const indices = await climateApi.fetchIndices();
@@ -84,15 +106,34 @@ export const createClimateSlice = (
 
   fetchChoropleth: async () => {
     const { selectedIndex, selectedMetric, selectedLevel, selectedYear } = get();
+    // For latest_value, don't pass a year — let the backend return the most recent asset.
+    // Passing selectedYear (defaults 2025) would fail if no data exists for that year yet.
+    const yearParam = undefined;
+    const vKey = valuesKey(selectedIndex, selectedMetric, selectedLevel, yearParam);
+
     set(() => ({ choroLoading: true }));
     try {
-      const data = await climateApi.fetchChoropleth(
-        selectedIndex,
-        selectedMetric,
-        selectedLevel,
-        selectedMetric === "latest_value" ? selectedYear : undefined
-      );
-      set(() => ({ choroData: data, choroLoading: false }));
+      // 1. Boundary (geometry) — fetched once per level, then cached forever
+      let boundary = _boundaryCache[selectedLevel];
+      if (!boundary) {
+        boundary = await climateApi.fetchBoundaries(selectedLevel);
+        _boundaryCache[selectedLevel] = boundary;
+      }
+
+      // 2. Values — cached by composite key
+      let values = _valuesCache.get(vKey);
+      if (!values) {
+        const resp = await climateApi.fetchValues(
+          selectedIndex,
+          selectedMetric,
+          selectedLevel,
+          yearParam
+        );
+        values = resp.values;
+        _valuesCache.set(vKey, values);
+      }
+
+      set(() => ({ boundaryData: boundary!, activeValues: values!, choroLoading: false }));
     } catch (err) {
       set(() => ({ choroLoading: false }));
       console.error("fetchChoropleth failed:", err);

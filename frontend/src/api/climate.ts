@@ -5,6 +5,8 @@ import type {
   ClimateMetric,
   ClimateLevel,
   ChoroplethResponse,
+  BoundaryFeatureCollection,
+  ValuesResponse,
   DistrictProfile,
   RankingRow,
 } from "../types/climate.types";
@@ -14,6 +16,21 @@ const BASE = import.meta.env.VITE_API_BASE || "/api/v1";
 export const climateApi = {
   fetchIndices(): Promise<ETCCDIIndex[]> {
     return axios.get(`${BASE}/climate/indices/`).then((r) => r.data);
+  },
+
+  fetchBoundaries(level: ClimateLevel): Promise<BoundaryFeatureCollection> {
+    return axios.get(`${BASE}/climate/boundaries/`, { params: { level } }).then((r) => r.data);
+  },
+
+  fetchValues(
+    index: ETCCDIIndexName,
+    metric: ClimateMetric,
+    level: ClimateLevel,
+    year?: number
+  ): Promise<ValuesResponse> {
+    const params: Record<string, string> = { index, metric, level };
+    if (year !== undefined) params.year = String(year);
+    return axios.get(`${BASE}/climate/values/`, { params }).then((r) => r.data);
   },
 
   fetchChoropleth(

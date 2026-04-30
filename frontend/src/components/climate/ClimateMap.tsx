@@ -1,9 +1,10 @@
 import { useEffect, useRef } from "react";
 import { MapContainer, TileLayer, GeoJSON, useMap } from "react-leaflet";
-import type { Map as LeafletMap, Layer as LeafletLayer } from "leaflet";
+import type { Layer as LeafletLayer } from "leaflet";
 import { interpolateRdYlBu, interpolateYlOrRd, interpolateBlues } from "d3-scale-chromatic";
 import { useStore } from "../../store";
-import type { ChoroplethFeatureProperties } from "../../types/climate.types";
+import type { BoundaryFeatureProperties, ValuesMap } from "../../types/climate.types";
+import { CATEGORY } from "./IndexSelector";
 
 import "leaflet/dist/leaflet.css";
 
@@ -53,7 +54,8 @@ function MapBounds({ data }: { data: unknown }) {
 }
 
 export default function ClimateMap() {
-  const choroData = useStore((s) => s.choroData);
+  const boundaryData = useStore((s) => s.boundaryData);
+  const activeValues = useStore((s) => s.activeValues);
   const choroLoading = useStore((s) => s.choroLoading);
   const fetchChoropleth = useStore((s) => s.fetchChoropleth);
   const fetchDistrictProfile = useStore((s) => s.fetchDistrictProfile);
@@ -61,49 +63,70 @@ export default function ClimateMap() {
   const selectedMetric = useStore((s) => s.selectedMetric);
   const selectedLevel = useStore((s) => s.selectedLevel);
   const selectedYear = useStore((s) => s.selectedYear);
-  const selectedDistrictCode = useStore((s) => s.selectedDistrictCode);
   const availableIndices = useStore((s) => s.availableIndices);
-  const geoJsonRef = useRef<LeafletMap | null>(null);
+
+  // Refs so Leaflet event handlers (set up once at mount) always read fresh values
+  const activeValuesRef = useRef<ValuesMap | null>(null);
+  const metricLabelRef = useRef<string>("");
+  const unitsRef = useRef<string>("");
 
   useEffect(() => {
     fetchChoropleth();
   }, [selectedIndex, selectedMetric, selectedLevel, selectedYear]);
 
-  const values = choroData?.features
-    .map((f) => f.properties.value)
-    .filter((v): v is number => v !== null) ?? [];
-  const minVal = values.length ? Math.min(...values) : 0;
-  const maxVal = values.length ? Math.max(...values) : 1;
-
+  const indexCategory = CATEGORY[selectedIndex];
   const colormap =
     selectedMetric === "trend_slope" || selectedMetric.startsWith("corr_")
       ? "RdYlBu_r"
+      : (indexCategory === "wet" || indexCategory === "dry")
+      ? "Blues"
       : "YlOrRd";
 
   const activeIndexMeta = availableIndices.find((i) => i.name === selectedIndex);
   const units = activeIndexMeta?.units ?? "";
   const metricLabel = METRIC_LABELS[selectedMetric] ?? selectedMetric;
 
-  const onEachFeature = (feature: GeoJSON.Feature, layer: LeafletLayer) => {
-    const props = feature.properties as ChoroplethFeatureProperties;
-    const valueStr = props.value !== null ? props.value.toFixed(3) : "-";
-    const unitsHtml = units
-      ? ` <span style="font-size:10px;font-weight:400;color:#94a3b8">${units}</span>`
-      : "";
+  // Keep refs in sync with latest render values
+  useEffect(() => { activeValuesRef.current = activeValues; }, [activeValues]);
+  useEffect(() => {
+    metricLabelRef.current = metricLabel;
+    unitsRef.current = units;
+  }, [metricLabel, units]);
 
-    layer.bindTooltip(
-      `<div style="min-width:140px;max-width:200px;font-family:system-ui,sans-serif">
-        <div style="font-weight:600;font-size:12px;color:#1e293b;margin-bottom:1px">${props.name}</div>
-        ${props.state ? `<div style="font-size:11px;color:#94a3b8;margin-bottom:4px">${props.state}</div>` : ""}
-        <hr style="border:none;border-top:1px solid #f1f5f9;margin:4px 0"/>
-        <div style="font-size:10px;color:#64748b;margin-bottom:2px">${metricLabel}</div>
-        <div style="font-family:monospace;font-size:13px;font-weight:700;color:#1e293b">
-          ${valueStr}${unitsHtml}
-        </div>
-      </div>`,
-      { sticky: true, opacity: 0.97 }
-    );
-    layer.on("click", () => {
+  // Compute min/max from activeValues for initial style function
+  const vals = activeValues ? Object.values(activeValues).filter((v): v is number => v !== null) : [];
+  const minVal = vals.length ? Math.min(...vals) : 0;
+  const maxVal = vals.length ? Math.max(...vals) : 1;
+
+  // onEachFeature is only called at mount (react-leaflet limitation).
+  // Tooltip content is updated lazily on mouseover via refs — no stale closures.
+  const onEachFeature = (feature: GeoJSON.Feature, layer: LeafletLayer) => {
+    const props = feature.properties as BoundaryFeatureProperties;
+
+    layer.bindTooltip("", { sticky: true, opacity: 0.97 });
+
+    (layer as any).on("mouseover", () => {
+      const value = activeValuesRef.current?.[props.code] ?? null;
+      const label = metricLabelRef.current;
+      const unit = unitsRef.current;
+      const valueStr = value !== null ? value.toFixed(3) : "—";
+      const unitsHtml = unit
+        ? ` <span style="font-size:10px;font-weight:400;color:#94a3b8">${unit}</span>`
+        : "";
+      layer.setTooltipContent(
+        `<div style="min-width:140px;max-width:200px;font-family:system-ui,sans-serif">
+          <div style="font-weight:600;font-size:12px;color:#1e293b;margin-bottom:1px">${props.name}</div>
+          ${props.state ? `<div style="font-size:11px;color:#94a3b8;margin-bottom:4px">${props.state}</div>` : ""}
+          <hr style="border:none;border-top:1px solid #f1f5f9;margin:4px 0"/>
+          <div style="font-size:10px;color:#64748b;margin-bottom:2px">${label}</div>
+          <div style="font-family:monospace;font-size:13px;font-weight:700;color:#1e293b">
+            ${valueStr}${unitsHtml}
+          </div>
+        </div>`
+      );
+    });
+
+    (layer as any).on("click", () => {
       fetchDistrictProfile(props.code);
     });
   };
@@ -131,16 +154,18 @@ export default function ClimateMap() {
           attribution="© OpenStreetMap © CARTO"
         />
 
-        {choroData && choroData.features.length > 0 && (
+        {boundaryData && boundaryData.features.length > 0 && (
           <GeoJSON
-            key={`${selectedIndex}-${selectedMetric}-${selectedLevel}`}
-            data={choroData as unknown as GeoJSON.FeatureCollection}
+            key={selectedLevel}
+            data={boundaryData as unknown as GeoJSON.FeatureCollection}
             style={(feature) => {
-              const v = (feature?.properties as ChoroplethFeatureProperties)?.value ?? null;
+              const code = (feature?.properties as BoundaryFeatureProperties)?.code;
+              const v = code != null ? (activeValues?.[code] ?? null) : null;
               return {
                 fillColor: getColor(v, minVal, maxVal, colormap),
-                weight: 0.4,
-                color: "#1e293b",
+                weight: 1.2,
+                color: getColor(v, minVal, maxVal, colormap),
+                opacity: 1,
                 fillOpacity: 0.82,
               };
             }}
@@ -148,7 +173,7 @@ export default function ClimateMap() {
           />
         )}
 
-        <MapBounds data={choroData} />
+        <MapBounds data={boundaryData} />
       </MapContainer>
 
     </div>
