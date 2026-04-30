@@ -22,8 +22,8 @@ const FULL_NAMES: Record<ETCCDIIndexName, string> = {
   R20mm:  "Very Heavy Precipitation Days (≥20mm)",
   CWD:    "Consecutive Wet Days",
   CDD:    "Consecutive Dry Days",
-  R95p:   "Very Wet Days (> 95th pct)",
-  R99p:   "Extremely Wet Days (> 99th pct)",
+  R95p:   "Very Wet Days (days > 95th pct)",
+  R99p:   "Extremely Wet Days (days > 99th pct)",
 };
 
 export const CATEGORY: Record<ETCCDIIndexName, "warm" | "cold" | "wet" | "dry"> = {
